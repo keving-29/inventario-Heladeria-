@@ -16,7 +16,7 @@ let DB = {
   proveedores: [],
   gastos:    [],
   traslados: [],
-  config:    { stockMin: 5, trasladoContador: 0 }  
+  config:    { stockMin: 5, trasladoContador: 0 }
 };
 
 let sesion              = null;
