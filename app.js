@@ -1,7 +1,7 @@
 // =============================================
 // CONFIGURACIÓN
 // =============================================
-const SCRIPT_URL = 'PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT_CREM_HELADO'; // <-- reemplaza con la URL que te da 'Implementar > Nueva implementación' en el Apps Script de Crem Helado
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxKd7Tazw9VHNCPWa6l0o6Xrto6v37YJPGL-PehM-6sA9sSCZZ36uJYpXPEtw6gU09NyA/exec';
 
 // =============================================
 // ESTADO LOCAL
