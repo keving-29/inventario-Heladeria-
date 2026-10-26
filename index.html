@@ -1,0 +1,805 @@
+<html lang="es"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crem Helado</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&amp;family=Inter:wght@300;400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="login-screen" class="hidden">
+    <div class="login-box">
+      <i class="ti ti-ice-cream-2 login-icon"></i>
+      <h1>Crem Helado</h1>
+      <p>Sistema de inventario y ventas</p>
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="Tu usuario">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="Tu contraseña">
+      <button id="btn-login">Ingresar</button>
+      <p id="login-error" class="hidden">Usuario o contraseña incorrectos</p>
+    </div>
+  </div>
+
+  <div id="app" class="">
+    <div id="sidebar-backdrop"></div>
+    <div id="app-shell">
+      <aside id="sidebar">
+        <div id="sidebar-brand">
+          <i class="ti ti-ice-cream-2"></i>
+          <div>
+            <span id="topbar-titulo">Crem Helado</span>
+            <span id="topbar-sub">Inventario &amp; Ventas</span>
+          </div>
+        </div>
+        <nav id="nav-tabs">
+          <button class="nav-tab active" data-tab="dashboard"><i class="ti ti-chart-bar"></i> Resumen</button>
+          <button class="nav-tab" data-tab="inventario"><i class="ti ti-package"></i> Inventario</button>
+          <button class="nav-tab" data-tab="ventas"><i class="ti ti-shopping-bag"></i> Vender</button>
+          <button class="nav-tab" data-tab="clientes"><i class="ti ti-address-book"></i> Clientes</button>
+          <button class="nav-tab" data-tab="cotizacion"><i class="ti ti-file-invoice"></i> Cotización</button>
+          <button class="nav-tab" data-tab="traslado"><i class="ti ti-truck"></i> Traslado</button>
+          <button class="nav-tab" data-tab="deudores"><i class="ti ti-users"></i> Deudores</button>
+          <button class="nav-tab" data-tab="anticipos"><i class="ti ti-cash-banknote"></i> Anticipos</button>
+          <button class="nav-tab" data-tab="proveedores"><i class="ti ti-building-warehouse"></i> Proveedores</button>
+          <button class="nav-tab" data-tab="gastos"><i class="ti ti-receipt-2"></i> Gastos</button>
+          <button class="nav-tab" data-tab="historial"><i class="ti ti-history"></i> Historial</button>
+          <button class="nav-tab" data-tab="reportes"><i class="ti ti-chart-pie"></i> Reportes</button>
+          <button class="nav-tab" data-tab="config"><i class="ti ti-settings"></i> Config</button>
+        </nav>
+      </aside>
+
+      <div id="app-main">
+        <div id="topbar">
+          <button id="btn-menu-toggle" aria-label="Abrir menú"><i class="ti ti-menu-2"></i></button>
+          <div id="topbar-right">
+            <span id="sync-status" class="conectado">Conectado</span>
+            <span id="topbar-user">KEVIN · admin</span>
+            <button id="btn-logout">Salir</button>
+          </div>
+        </div>
+
+        <main id="main-content">
+
+      <!-- DASHBOARD -->
+      <section id="panel-dashboard" class="panel active">
+        <p id="dash-fecha">Hoy · viernes, 4 de septiembre de 2026</p>
+        <div id="dash-metrics">
+    <div class="metric rosa"><div class="mlabel">Total vendido hoy</div><div class="mvalue">$84.000</div></div>
+    <div class="metric"><div class="mlabel">Transacciones</div><div class="mvalue">2</div></div>
+    <div class="metric"><div class="mlabel">Productos</div><div class="mvalue">1072</div></div>
+    <div class="metric alerta"><div class="mlabel">Stock bajo</div><div class="mvalue">764</div></div>
+    <div class="metric danger"><div class="mlabel">Sin stock</div><div class="mvalue">14</div></div>
+    <div class="metric danger"><div class="mlabel">Deudas vencidas</div><div class="mvalue">1</div></div>
+    
+    
+    
+  </div>
+        <div class="card">
+          <div class="section-header">
+            <h2>Ventas de hoy</h2>
+            <button class="btn-primary" data-goto="ventas">+ Nueva venta</button>
+          </div>
+          <div id="dash-ventas-hoy"><div class="tabla-wrap"><table>
+    <thead><tr><th>Hora</th><th>Productos</th><th>Nota</th><th>Pago</th><th>Total</th><th>Ganancia</th><th></th></tr></thead>
+    <tbody>
+    <tr class="fila-venta-clickeable" data-id="4eszvmck3mimtmzq942">
+      <td>08:29 a. m.</td>
+      <td style="font-size:13px"></td>
+      <td style="font-size:13px;color:var(--texto2)">-</td>
+      <td><span class="badge verde">💵 Efectivo</span></td>
+      <td style="font-weight:500">$42.000</td>
+      <td style="color:var(--rosa-oscuro);font-weight:500">$15.000</td>
+      <td><i class="ti ti-receipt" style="color:var(--rosa-medio);font-size:16px"></i></td>
+    </tr>
+    <tr class="fila-venta-clickeable" data-id="omu21gqeq0bmtmzq34u">
+      <td>08:29 a. m.</td>
+      <td style="font-size:13px">BALINERA KOYO ORIGINAL 6202 x1, BALINERA KOYO ORIGINAL 6001 x2, BALINERA KOYO ORIGINAL 6000 x1, RETENEDOR CABEZOTE SHINDAIWA B-45 x1</td>
+      <td style="font-size:13px;color:var(--texto2)">-</td>
+      <td><span class="badge verde">💵 Efectivo</span></td>
+      <td style="font-weight:500">$42.000</td>
+      <td style="color:var(--rosa-oscuro);font-weight:500">$15.000</td>
+      <td><i class="ti ti-receipt" style="color:var(--rosa-medio);font-size:16px"></i></td>
+    </tr></tbody></table></div></div>
+        </div>
+      </section>
+
+      <!-- INVENTARIO -->
+      <section id="panel-inventario" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Inventario</h2>
+            <button class="btn-primary" id="btn-abrir-modal-producto">+ Agregar producto</button>
+          </div>
+          <input type="text" id="inv-search" placeholder="Buscar por nombre o referencia...">
+          <div id="inv-contenido"></div>
+        </div>
+      </section>
+
+      <!-- VENTAS -->
+      <section id="panel-ventas" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Registrar venta</h2>
+          </div>
+
+          <!-- Cliente (opcional) -->
+          <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Cliente (opcional)</p>
+          <div id="venta-cliente-busqueda-box">
+            <input type="text" id="venta-cliente-buscar" placeholder="Buscar cliente por nombre o cédula...">
+            <div id="venta-cliente-resultados"></div>
+          </div>
+          <div id="venta-cliente-seleccionado" class="producto-seleccionado-box hidden">
+            <div class="producto-seleccionado-info">
+              <strong id="venta-cliente-nombre"></strong>
+              <span id="venta-cliente-detalle"></span>
+            </div>
+            <button type="button" class="btn-peligro" id="btn-quitar-cliente-venta" style="padding:6px 10px"><i class="ti ti-x"></i></button>
+          </div>
+          <div id="venta-cliente-atajos" class="hidden" style="margin-bottom:1rem"></div>
+          <button type="button" class="btn-secundario" id="btn-nuevo-cliente-venta" style="margin-bottom:1rem"><i class="ti ti-user-plus"></i> Nuevo cliente</button>
+
+          <!-- Buscador principal -->
+          <div id="venta-busqueda-box">
+            <input type="text" id="venta-search" placeholder="Buscar producto y presiona Enter...">
+            <div id="venta-resultados"></div>
+          </div>
+
+          <!-- Carrito -->
+          <div id="carrito"></div>
+
+          <!-- Footer con total y confirmar -->
+          <div id="venta-footer" class="hidden">
+            <div id="venta-total-box">
+              <span>Total venta</span>
+              <span id="vt-total">$0</span>
+            </div>
+                        <div id="metodo-pago-box">
+              <p>Método de pago</p>
+              <div id="metodo-pago-opciones">
+                <label>
+                  <input type="radio" name="metodo-pago" value="efectivo" checked="">
+                  💵 Efectivo
+                </label>
+                <label>
+                  <input type="radio" name="metodo-pago" value="transferencia">
+                  🏦 Transferencia
+                </label>
+                <label>
+                  <input type="radio" name="metodo-pago" value="mixto">
+                  🔀 Pago mixto
+                </label>
+              </div>
+              <div id="pago-mixto-box" class="hidden">
+                <label>Efectivo: <input type="number" id="pago-mixto-efectivo" min="0" value="0"></label>
+                <label>Transferencia: <input type="number" id="pago-mixto-transferencia" min="0" value="0"></label>
+                <div id="pago-mixto-restante"></div>
+              </div>
+            </div>
+            <input type="text" id="venta-nota" placeholder="Nota opcional (ej: cliente especial)">
+            <div id="venta-acciones">
+              <button id="btn-limpiar-carrito" class="btn-peligro">Limpiar</button>
+              <button class="btn-primary" id="btn-confirmar-venta">Confirmar venta</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section id="panel-clientes" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Clientes</h2>
+            <button class="btn-primary" id="btn-abrir-modal-cliente">+ Agregar cliente</button>
+          </div>
+          <input type="text" id="clientes-search" placeholder="Buscar por nombre o cédula/NIT...">
+          <div id="clientes-contenido"></div>
+        </div>
+      </section>
+
+      <!-- COTIZACIÓN (no afecta inventario ni se registra como venta) -->
+      <section id="panel-cotizacion" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Cotización</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-secundario" id="btn-imprimir-cotizacion"><i class="ti ti-printer"></i> Imprimir cotización</button>
+              <button class="btn-peligro" id="btn-limpiar-cotizacion">Limpiar</button>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">Arma una cotización para el cliente. No descuenta stock ni se registra como venta.</p>
+
+          <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Cliente registrado (opcional)</p>
+          <div id="cotizacion-cliente-busqueda-box">
+            <input type="text" id="cotizacion-cliente-buscar" placeholder="Buscar cliente por nombre o cédula...">
+            <div id="cotizacion-cliente-resultados"></div>
+          </div>
+          <div id="cotizacion-cliente-seleccionado" class="producto-seleccionado-box hidden">
+            <div class="producto-seleccionado-info">
+              <strong id="cotizacion-cliente-nombre"></strong>
+              <span id="cotizacion-cliente-detalle"></span>
+            </div>
+            <button type="button" class="btn-peligro" id="btn-quitar-cliente-cotizacion" style="padding:6px 10px"><i class="ti ti-x"></i></button>
+          </div>
+
+          <input type="text" id="cot-cliente" placeholder="O escribe el nombre (si el cliente no está registrado)" style="margin-bottom:1rem">
+
+          <div id="cotizacion-busqueda-box">
+            <input type="text" id="cotizacion-search" placeholder="Buscar producto y presiona Enter...">
+            <div id="cotizacion-resultados"></div>
+          </div>
+
+          <div id="cotizacion-contenido"></div>
+        </div>
+      </section>
+
+      <!-- TRASLADO -->
+      <section id="panel-traslado" class="panel">
+        <div class="card">
+          <div style="text-align:center;margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--borde)">
+            <h1 style="font-family:var(--fuente-titulo);font-size:22px;color:var(--rosa-oscuro)">Crem Helado</h1>
+          </div>
+          <div class="section-header">
+            <h2>Traslado de productos</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-secundario" id="btn-imprimir-traslado"><i class="ti ti-printer"></i> Imprimir</button>
+              <button class="btn-peligro" id="btn-limpiar-traslado">Limpiar lista</button>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">Agrega productos a la lista de traslado. No se descuenta stock ni se registra como venta.</p>
+
+          <div id="traslado-busqueda-box">
+            <input type="text" id="traslado-search" placeholder="Buscar producto y presiona Enter...">
+            <div id="traslado-resultados"></div>
+          </div>
+
+          <div id="traslado-contenido"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Traslados realizados</h2>
+          </div>
+          <div id="traslados-historial-contenido"></div>
+        </div>
+      </section>
+
+      <!-- DEUDORES -->
+      <section id="panel-deudores" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Deudores</h2>
+            <button class="btn-primary" id="btn-abrir-modal-deudor">+ Agregar</button>
+          </div>
+          <div id="deudores-contenido"></div>
+        </div>
+      </section>
+
+      <!-- ANTICIPOS -->
+      <section id="panel-anticipos" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Anticipos</h2>
+            <button class="btn-primary" id="btn-abrir-modal-anticipo">+ Agregar</button>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">El producto sigue en el inventario hasta que el cliente cancele el anticipo por completo; ahí se descuenta y se lo lleva.</p>
+          <div id="anticipos-contenido"></div>
+        </div>
+      </section>
+
+      <!-- PROVEEDORES -->
+      <section id="panel-proveedores" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Proveedores</h2>
+            <button class="btn-primary" id="btn-abrir-modal-proveedor">+ Agregar factura</button>
+          </div>
+          <div id="proveedores-contenido"></div>
+        </div>
+      </section>
+
+      <!-- GASTOS -->
+      <section id="panel-gastos" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Gastos del local</h2>
+            <button class="btn-primary" id="btn-abrir-modal-gasto">+ Agregar gasto</button>
+          </div>
+          <div id="gastos-resumen"></div>
+          <div id="gastos-contenido"></div>
+        </div>
+      </section>
+
+      <!-- HISTORIAL -->
+      <section id="panel-historial" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Historial de ventas</h2>
+            <input type="date" id="hist-fecha">
+          </div>
+          <div id="hist-summary"></div>
+          <div id="hist-contenido"></div>
+        </div>
+      </section>
+
+      <!-- REPORTES -->
+      <section id="panel-reportes" class="panel">
+        <div class="section-header">
+          <h2 style="font-family:var(--fuente-titulo);font-size:22px;color:var(--rosa-oscuro)">Reportes de ventas</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-reporte" data-periodo="dia">Hoy</button>
+            <button class="btn-reporte active" data-periodo="semana">Esta semana</button>
+            <button class="btn-reporte" data-periodo="mes">Este mes</button>
+            <button class="btn-reporte" data-periodo="año">Este año</button>
+          </div>
+        </div>
+
+        <!-- Métricas del periodo -->
+        <div id="reporte-metrics"></div>
+
+        <!-- Desglose pago ventas -->
+        <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Ventas por método de pago</p>
+        <div id="reporte-pago" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:1.5rem"></div>
+
+        <!-- Resumen neto del mes (independiente de las pestañas de arriba) -->
+        <div class="card" style="margin-top:1.5rem;border:0.5px solid var(--rosa-medio)">
+          <div class="section-header">
+            <h2>Resumen neto del mes</h2>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">Ganancia de ventas menos gastos del local, mes a mes (se reinicia automáticamente cada mes).</p>
+          <div id="resumen-neto-metrics"></div>
+          <div id="resumen-neto-pago" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px"></div>
+        </div>
+      </section>
+
+      <!-- CONFIG -->
+      <section id="panel-config" class="panel">
+        <div class="card">
+          <h2>Usuarios</h2>
+          <div id="usuarios-list"></div>
+          <div id="form-nuevo-usuario">
+            <input type="text" id="nu-user" placeholder="Usuario">
+            <input type="password" id="nu-pass" placeholder="Contraseña">
+            <select id="nu-rol">
+              <option value="vendedor">Vendedor</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <button class="btn-primary" id="btn-agregar-usuario">Agregar usuario</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Stock mínimo de alerta</h2>
+          <input type="number" id="conf-stock-min" placeholder="5" min="0">
+          <button class="btn-primary" id="btn-guardar-config">Guardar</button>
+        </div>
+        <div class="card">
+          <h2>Impresora POS</h2>
+          <p style="font-size:13px;color:var(--texto2);margin-bottom:12px">Configura tu impresora aquí cuando la tengas (USB · QZ Tray)</p>
+          <button class="btn-primary" id="btn-probar-impresora">Probar impresora</button>
+        </div>
+      </section>
+
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Agregar/Editar producto -->
+  <div id="modal-producto" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-prod-titulo">Agregar producto</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-producto">✕</button>
+      </div>
+      <input type="text" id="prod-codigobarras" placeholder="Código de barras de fábrica (opcional, escanéalo aquí)">
+      <input type="text" id="prod-ref" placeholder="Referencia / Código *">
+      <input type="text" id="prod-nombre" placeholder="Nombre del producto *">
+      <input type="number" id="prod-pcompra" placeholder="Precio de compra *">
+      <div id="prod-pcompra-iva" style="font-size:12px;color:var(--rosa-oscuro);margin:-8px 0 4px 2px"></div>
+      <input type="number" id="prod-pventa1" placeholder="Precio de venta 1 (normal) *">
+      <input type="number" id="prod-pventa2" placeholder="Precio de venta 2 (especial)">
+      <input type="number" id="prod-stock" placeholder="Stock disponible *">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-producto" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-producto" style="flex:1">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Clave de sección privada -->
+  <div id="modal-clave-panel" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Sección privada</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-clave-panel">✕</button>
+      </div>
+      <input type="password" id="clave-panel-input" placeholder="Clave de acceso">
+      <p id="clave-panel-error" class="hidden" style="color:#A32D2D;font-size:13px;margin-bottom:8px">Clave incorrecta</p>
+      <button class="btn-primary" id="btn-verificar-clave-panel" style="width:100%">Entrar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: PIN admin -->
+  <div id="modal-pin" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Solo administradores</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-pin">✕</button>
+      </div>
+      <input type="password" id="pin-input" placeholder="Contraseña de administrador">
+      <p id="pin-error" class="hidden" style="color:#A32D2D;font-size:13px;margin-bottom:8px">Contraseña incorrecta</p>
+      <button class="btn-primary" id="btn-verificar-pin" style="width:100%">Verificar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Cambiar precio -->
+  <div id="modal-precio" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Precio de esta venta</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-precio">✕</button>
+      </div>
+      <p id="mpv-nombre-producto" style="font-size:13px;color:var(--texto2);margin-bottom:1rem"></p>
+      <button id="mpv-btn-precio1" style="width:100%;margin-bottom:8px"></button>
+      <button id="mpv-btn-precio2" style="width:100%;margin-bottom:8px"></button>
+      <input type="number" id="mpv-precio-custom" placeholder="O escribe un precio personalizado">
+      <button class="btn-primary" id="btn-aplicar-precio" style="width:100%">Aplicar precio</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Flujo rápido — cantidad y precio -->
+  <div id="modal-rapido" class="modal-bg hidden">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <h3 id="rapido-nombre" style="font-size:16px"></h3>
+        <button class="btn-cerrar-modal" data-modal="modal-rapido">✕</button>
+      </div>
+
+      <!-- Paso 1: Cantidad -->
+      <div id="rapido-paso-cantidad">
+        <p style="font-size:13px;color:var(--texto2);margin-bottom:10px">¿Cuántas unidades?</p>
+        <input type="number" id="rapido-cantidad" min="1" value="1" style="font-size:22px;text-align:center;font-weight:600">
+        <p style="font-size:11px;color:var(--texto3);margin-top:4px;margin-bottom:12px">Presiona Enter para continuar</p>
+        <button class="btn-primary" id="btn-rapido-siguiente" style="width:100%">Siguiente → Precio</button>
+      </div>
+
+      <!-- Paso 2: Precio -->
+      <div id="rapido-paso-precio" class="hidden">
+        <p style="font-size:13px;color:var(--texto2);margin-bottom:12px">¿Con qué precio?</p>
+        <button id="rapido-btn-p1" class="btn-primary" style="width:100%;margin-bottom:8px;font-size:15px;padding:12px"></button>
+        <button id="rapido-btn-p2" class="btn-secundario" style="width:100%;margin-bottom:8px;font-size:15px;padding:12px"></button>
+        <div style="position:relative;margin-bottom:8px">
+          <input type="number" id="rapido-precio-custom" placeholder="Precio personalizado..." style="padding-right:120px">
+          <button class="btn-primary" id="rapido-btn-custom" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:6px 12px;font-size:12px;border-radius:16px">Aplicar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Factura -->
+  <div id="modal-factura" class="modal-bg hidden">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h3>Detalle de venta</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-factura">✕</button>
+      </div>
+      <div id="factura-contenido"></div>
+      <button class="btn-primary" id="btn-imprimir-boucher" style="width:100%;margin-top:12px"><i class="ti ti-printer"></i> Imprimir boucher</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Nuevo/Editar cliente -->
+  <div id="modal-cliente" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-cliente-titulo">Nuevo cliente</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-cliente">✕</button>
+      </div>
+      <input type="text" id="cliente-nombre" placeholder="Nombre completo *">
+      <label style="font-size:12px;color:var(--texto2);display:block;margin:6px 0 2px">Tipo de documento</label>
+      <select id="cliente-tipodoc">
+        <option value="CC">CC — Cédula de ciudadanía</option>
+        <option value="NIT">NIT — Empresa / Persona jurídica</option>
+        <option value="CE">CE — Cédula de extranjería</option>
+        <option value="PEP">PEP — Permiso especial de permanencia</option>
+        <option value="PP">PP — Pasaporte</option>
+        <option value="TI">TI — Tarjeta de identidad</option>
+      </select>
+      <input type="text" id="cliente-cedula" placeholder="Número de documento *">
+      <input type="text" id="cliente-telefono" placeholder="Teléfono">
+      <input type="text" id="cliente-direccion" placeholder="Dirección">
+      <input type="email" id="cliente-correo" placeholder="Correo">
+      <div style="margin-top:6px;padding-top:10px;border-top:0.5px solid var(--borde)">
+        <label style="font-size:12px;color:var(--texto2);display:block;margin-bottom:4px"><strong>Precios especiales de este cliente</strong> (opcional)</label>
+        <div id="cliente-precios-lista"></div>
+        <input type="text" id="cliente-precio-buscar" placeholder="Buscar producto para agregarle precio...">
+        <div id="cliente-precio-resultados"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-cliente" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-cliente" style="flex:1">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Agregar/Editar deudor -->
+  <div id="modal-deudor" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-deudor-titulo">Agregar deudor</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-deudor">✕</button>
+      </div>
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Cliente *</p>
+      <div id="deudor-cliente-busqueda-box">
+        <input type="text" id="deudor-cliente-buscar" placeholder="Buscar cliente por nombre o cédula...">
+        <div id="deudor-cliente-resultados"></div>
+      </div>
+      <div id="deudor-cliente-seleccionado" class="producto-seleccionado-box hidden">
+        <div class="producto-seleccionado-info">
+          <strong id="deudor-cliente-nombre"></strong>
+          <span id="deudor-cliente-detalle"></span>
+        </div>
+        <button type="button" class="btn-peligro" id="btn-quitar-cliente-deudor" style="padding:6px 10px"><i class="ti ti-x"></i></button>
+      </div>
+      <button type="button" class="btn-secundario" id="btn-nuevo-cliente-deudor" style="margin-bottom:1rem"><i class="ti ti-user-plus"></i> Nuevo cliente</button>
+
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Productos que lleva (opcional)</p>
+      <div id="deudor-producto-busqueda-box">
+        <input type="text" id="deudor-producto-buscar" placeholder="Buscar por nombre o código...">
+        <div id="deudor-producto-resultados"></div>
+      </div>
+      <div id="deudor-productos-lista" style="margin-bottom:10px"></div>
+
+      <input type="number" id="deudor-monto" placeholder="Monto total de la deuda *">
+      <input type="number" id="deudor-anticipo" placeholder="¿Cuánto paga ahora? (opcional)">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago del anticipo</p>
+      <div style="display:flex;gap:20px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="deudor-metodo" value="efectivo" checked=""> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="deudor-metodo" value="transferencia"> 🏦 Transferencia</label>
+      </div>
+      <input type="text" id="deudor-nota" placeholder="Comentario opcional">
+      <label style="display:block;font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Fecha límite de pago</label>
+      <input type="date" id="deudor-fecha-limite">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-deudor" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-deudor" style="flex:1">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Agregar/Editar anticipo -->
+  <div id="modal-anticipo" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-anticipo-titulo">Agregar anticipo</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-anticipo">✕</button>
+      </div>
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Cliente *</p>
+      <div id="anticipo-cliente-busqueda-box">
+        <input type="text" id="anticipo-cliente-buscar" placeholder="Buscar cliente por nombre o cédula...">
+        <div id="anticipo-cliente-resultados"></div>
+      </div>
+      <div id="anticipo-cliente-seleccionado" class="producto-seleccionado-box hidden">
+        <div class="producto-seleccionado-info">
+          <strong id="anticipo-cliente-nombre"></strong>
+          <span id="anticipo-cliente-detalle"></span>
+        </div>
+        <button type="button" class="btn-peligro" id="btn-quitar-cliente-anticipo" style="padding:6px 10px"><i class="ti ti-x"></i></button>
+      </div>
+      <button type="button" class="btn-secundario" id="btn-nuevo-cliente-anticipo" style="margin-bottom:1rem"><i class="ti ti-user-plus"></i> Nuevo cliente</button>
+
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Productos que lleva (opcional)</p>
+      <div id="anticipo-producto-busqueda-box">
+        <input type="text" id="anticipo-producto-buscar" placeholder="Buscar por nombre o código...">
+        <div id="anticipo-producto-resultados"></div>
+      </div>
+      <div id="anticipo-productos-lista" style="margin-bottom:10px"></div>
+
+      <input type="number" id="anticipo-monto" placeholder="Monto total *">
+      <input type="number" id="anticipo-inicial" placeholder="¿Cuánto paga ahora? (opcional)">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
+      <div style="display:flex;gap:20px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="anticipo-metodo" value="efectivo" checked=""> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="anticipo-metodo" value="transferencia"> 🏦 Transferencia</label>
+      </div>
+      <input type="text" id="anticipo-nota" placeholder="Comentario opcional">
+      <label style="display:block;font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Fecha límite de pago</label>
+      <input type="date" id="anticipo-fecha-limite">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-anticipo" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-anticipo" style="flex:1">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Agregar factura de proveedor -->
+  <div id="modal-proveedor" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Agregar factura de proveedor</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-proveedor">✕</button>
+      </div>
+      <input type="text" id="proveedor-empresa" placeholder="Nombre de la empresa *">
+      <label style="display:block;font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Fecha de llegada del pedido</label>
+      <input type="date" id="proveedor-fecha-llegada">
+      <input type="number" id="proveedor-monto" placeholder="Monto total del pedido *">
+      <input type="number" id="proveedor-cuotas" placeholder="Número de cuotas" min="1" value="1">
+      <label style="display:block;font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Fecha límite de pago</label>
+      <input type="date" id="proveedor-fecha-limite">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-proveedor" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-proveedor" style="flex:1">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Abonar factura proveedor -->
+  <div id="modal-abono-proveedor" class="modal-bg hidden">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h3 id="abono-proveedor-nombre" style="font-size:16px"></h3>
+        <button class="btn-cerrar-modal" data-modal="modal-abono-proveedor">✕</button>
+      </div>
+      <p id="abono-proveedor-saldo" style="font-size:13px;color:var(--texto2);margin-bottom:10px"></p>
+      <input type="number" id="abono-proveedor-monto" placeholder="Monto que abonas *">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
+      <div style="display:flex;gap:20px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="abono-proveedor-metodo" value="efectivo" checked=""> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="abono-proveedor-metodo" value="transferencia"> 🏦 Transferencia</label>
+      </div>
+      <button class="btn-primary" id="btn-guardar-abono-proveedor" style="width:100%">Registrar pago</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Registrar abono -->
+  <div id="modal-abono" class="modal-bg hidden">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h3 id="abono-nombre" style="font-size:16px"></h3>
+        <button class="btn-cerrar-modal" data-modal="modal-abono">✕</button>
+      </div>
+      <p id="abono-saldo" style="font-size:13px;color:var(--texto2);margin-bottom:10px"></p>
+      <input type="number" id="abono-monto" placeholder="Monto del abono *">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
+      <div style="display:flex;gap:20px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="abono-metodo" value="efectivo" checked=""> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="abono-metodo" value="transferencia"> 🏦 Transferencia</label>
+      </div>
+      <button class="btn-primary" id="btn-guardar-abono" style="width:100%">Registrar abono</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Agregar gasto -->
+  <div id="modal-gasto" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Agregar gasto</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-gasto">✕</button>
+      </div>
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Categoría</p>
+      <div id="gasto-categorias">
+        <button type="button" class="gasto-cat-btn" data-cat="Agua"><i class="ti ti-droplet"></i> Agua</button>
+        <button type="button" class="gasto-cat-btn" data-cat="Luz"><i class="ti ti-bolt"></i> Luz</button>
+        <button type="button" class="gasto-cat-btn" data-cat="Arriendo Local"><i class="ti ti-home"></i> Arriendo Local</button>
+        <button type="button" class="gasto-cat-btn" data-cat="Internet"><i class="ti ti-wifi"></i> Internet</button>
+        <button type="button" class="gasto-cat-btn" data-cat="Pago empleados"><i class="ti ti-users"></i> Pago empleados</button>
+        <button type="button" class="gasto-cat-btn" data-cat="Otros"><i class="ti ti-dots"></i> Otros</button>
+      </div>
+      <input type="number" id="gasto-monto" placeholder="Monto *" style="margin-top:14px">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
+      <div style="display:flex;gap:20px;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="gasto-metodo" value="efectivo" checked=""> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="gasto-metodo" value="transferencia"> 🏦 Transferencia</label>
+      </div>
+      <input type="text" id="gasto-nota" placeholder="Nota opcional">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-gasto" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-gasto" style="flex:1">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Cantidad traslado -->
+  <div id="modal-cantidad-traslado" class="modal-bg hidden">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <h3 id="ct-nombre" style="font-size:16px"></h3>
+        <button class="btn-cerrar-modal" data-modal="modal-cantidad-traslado">✕</button>
+      </div>
+      <p style="font-size:13px;color:var(--texto2);margin-bottom:10px">¿Cuántas unidades vas a trasladar?</p>
+      <input type="number" id="ct-cantidad" min="1" value="1" style="font-size:22px;text-align:center;font-weight:600">
+      <p style="font-size:11px;color:var(--texto3);margin-top:4px;margin-bottom:12px">Presiona Enter para agregar</p>
+      <button class="btn-primary" id="btn-ct-agregar" style="width:100%">Agregar al traslado</button>
+    </div>
+  </div>
+
+  <!-- MODAL: cantidad y precio unitario al agregar producto a la cotización -->
+  <div id="modal-cantidad-cotizacion" class="modal-bg hidden">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <h3 id="cq-nombre" style="font-size:16px"></h3>
+        <button class="btn-cerrar-modal" data-modal="modal-cantidad-cotizacion">✕</button>
+      </div>
+      <p style="font-size:13px;color:var(--texto2);margin-bottom:6px">Cantidad</p>
+      <input type="number" id="cq-cantidad" min="1" value="1">
+      <p style="font-size:13px;color:var(--texto2);margin:10px 0 6px">Precio unitario</p>
+      <input type="number" id="cq-precio" min="0">
+      <button class="btn-primary" id="btn-cq-agregar" style="width:100%;margin-top:10px">Agregar a la cotización</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Lista de productos sin stock / stock bajo (desde Resumen) -->
+  <div id="modal-stock" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-stock-titulo">Productos</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-stock">✕</button>
+      </div>
+      <div id="modal-stock-contenido" style="max-height:60vh;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Pago en efectivo (vueltos) -->
+  <div id="modal-pago-efectivo" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Pago en efectivo</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-pago-efectivo">✕</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:600;margin-bottom:14px">
+        <span>Total</span><span id="pef-total">$0</span>
+      </div>
+      <label style="font-size:12px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px">Valor del pago en efectivo</label>
+      <input type="number" id="pef-recibido" min="0" style="font-size:20px;font-weight:600;margin-bottom:10px">
+      <p style="font-size:12px;color:var(--texto2);margin-bottom:6px">Opciones rápidas</p>
+      <div id="pef-opciones-rapidas" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:700;padding:10px 0;border-top:0.5px solid var(--borde)">
+        <span>Cambio</span><span id="pef-cambio">$0</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn-cerrar-modal" data-modal="modal-pago-efectivo" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-pef-continuar" style="flex:1">Continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPRESIÓN: Traslado -->
+  <div id="traslado-print">
+    <div id="traslado-print-contenido"></div>
+  </div>
+
+  <!-- IMPRESIÓN: Cotización -->
+  <div id="cotizacion-print">
+    <div id="cotizacion-print-contenido"></div>
+  </div>
+
+  <!-- IMPRESIÓN: Boucher de venta -->
+  <div id="venta-print">
+    <div id="venta-print-contenido"></div>
+  </div>
+
+  <!-- IMPRESIÓN: Boucher de deudor / anticipo -->
+  <div id="deudor-print">
+    <div id="deudor-print-contenido"></div>
+  </div>
+
+
+  <!-- IMPRESIÓN: Boucher de proveedor -->
+  <div id="proveedor-print">
+    <div id="proveedor-print-contenido"></div>
+  </div>
+
+  <div id="toast" class="">Datos sincronizados ✓</div>
+
+  <!-- NUEVO — Impresión térmica POS (CX-POS CX-20) vía QZ Tray.
+       Requiere tener QZ Tray instalado y corriendo en el computador con
+       Windows (ver instrucciones aparte). Si la librería no carga o QZ Tray
+       no está corriendo, app.js cae automáticamente a la impresión con
+       window.print() de toda la vida, así que esto no rompe nada si no se
+       instala QZ Tray. -->
+  <script src="qz-tray.js"></script>
+  <script src="qz-security.js"></script>
+  <script src="app.js"></script>
+
+</body></html>
