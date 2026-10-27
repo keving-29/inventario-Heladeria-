@@ -16,6 +16,7 @@ let DB = {
   proveedores: [],
   gastos:    [],
   traslados: [],
+  liquidaciones: [],
   config:    { stockMin: 5, trasladoContador: 0 }
 };
 
@@ -234,6 +235,12 @@ async function sincronizar(ventasDias) {
     }));
   }
 
+  if (Array.isArray(datos.Liquidaciones)) {
+    DB.liquidaciones = datos.Liquidaciones.length > 1
+      ? datos.Liquidaciones.slice(1).map(parsearLiquidacion)
+      : [];
+  }
+
   if (datos.Config && datos.Config.length > 1) {
     DB.config.stockMin = Number(datos.Config[1][0]) || 5;
     DB.config.trasladoContador = Number(datos.Config[1][1]) || 0;
@@ -268,6 +275,8 @@ async function inicializarSheets() {
     await sheetsEscribir('append', 'Gastos', ['ID','Categoria','Monto','MetodoPago','Fecha','Hora','Nota']);
   if (!datos.Traslados || datos.Traslados.length === 0)
     await sheetsEscribir('append', 'Traslados', ['ID','Numero','Fecha','Hora','Items']);
+  if (!datos.Liquidaciones || datos.Liquidaciones.length === 0)
+    await sheetsEscribir('append', 'Liquidaciones', ['ID','ClienteId','Cliente','Fecha','Hora','Items','Unidades','TotalPagar','VentaPublico','Ganancia','Pagos','Nota']);
   if (!datos.Config || datos.Config.length === 0) {
     await sheetsEscribir('append', 'Config', ['StockMin','TrasladoContador']);
     await sheetsEscribir('append', 'Config', [5, 0]);
@@ -510,6 +519,7 @@ async function mostrarPanelInterno(panel) {
     setTimeout(() => document.getElementById('inv-search').focus(), 100);
   }
   if (panel === 'clientes')   renderClientes();
+  if (panel === 'liquidacion') { liqMostrarVendedor(); renderLiqEditor(); renderLiqHistorial(); }
   if (panel === 'deudores')   renderDeudores();
   if (panel === 'anticipos')  renderAnticipos();
   if (panel === 'proveedores') renderProveedores();
@@ -683,6 +693,7 @@ function prepararImpresion(idContenedor) {
   document.getElementById('deudor-print').classList.remove('activo');
   document.getElementById('proveedor-print').classList.remove('activo');
   document.getElementById('cotizacion-print').classList.remove('activo');
+  document.getElementById('liquidacion-print').classList.remove('activo');
   document.getElementById(idContenedor).classList.add('activo');
 }
 
@@ -1097,7 +1108,7 @@ let preciosClienteEdicion = [];
 function parsearPreciosCliente(v) {
   const arr = parsearJSON(v);
   return Array.isArray(arr)
-    ? arr.filter(x => x && x.productoId && Number(x.precio) >= 0).map(x => ({ productoId: String(x.productoId), ref: String(x.ref||''), nombre: String(x.nombre||''), precio: Number(x.precio) }))
+    ? arr.filter(x => x && x.productoId && Number(x.precio) >= 0).map(x => ({ productoId: String(x.productoId), ref: String(x.ref||''), nombre: String(x.nombre||''), precio: Number(x.precio), publico: Number(x.publico)||0 }))
     : [];
 }
 
@@ -1122,12 +1133,16 @@ function renderPreciosClienteEdicion() {
   }
   lista.innerHTML = preciosClienteEdicion.map((x, i) => `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <span style="flex:1;font-size:13px">${esc(x.nombre)}</span>
-      <input type="number" min="0" value="${x.precio}" class="input-precio-cliente" data-i="${i}" style="width:110px;margin:0">
+      <span style="flex:1;min-width:110px;font-size:13px">${esc(x.nombre)}</span>
+      <input type="number" min="0" value="${x.precio}" class="input-precio-cliente" data-i="${i}" title="Precio de lista (lo que paga)" placeholder="Lista" style="width:92px;margin:0">
+      <input type="number" min="0" value="${x.publico||''}" class="input-publico-cliente" data-i="${i}" title="Precio público (solo para liquidación de vendedores)" placeholder="Público" style="width:92px;margin:0">
       <button type="button" class="btn-peligro btn-quitar-precio-cliente" data-i="${i}" style="padding:5px 9px"><i class="ti ti-x"></i></button>
     </div>`).join('');
   lista.querySelectorAll('.input-precio-cliente').forEach(inp => inp.addEventListener('input', () => {
     preciosClienteEdicion[parseInt(inp.dataset.i)].precio = parseFloat(inp.value) || 0;
+  }));
+  lista.querySelectorAll('.input-publico-cliente').forEach(inp => inp.addEventListener('input', () => {
+    preciosClienteEdicion[parseInt(inp.dataset.i)].publico = parseFloat(inp.value) || 0;
   }));
   lista.querySelectorAll('.btn-quitar-precio-cliente').forEach(b => b.addEventListener('click', () => {
     preciosClienteEdicion.splice(parseInt(b.dataset.i), 1);
@@ -1149,7 +1164,7 @@ function buscarProductoPrecioCliente() {
     const p = DB.productos.find(x => x.id === b.dataset.id);
     if (!p) return;
     if (!preciosClienteEdicion.find(x => x.productoId === p.id)) {
-      preciosClienteEdicion.push({ productoId: p.id, ref: p.ref, nombre: p.nombre, precio: p.pventa1 });
+      preciosClienteEdicion.push({ productoId: p.id, ref: p.ref, nombre: p.nombre, precio: p.pventa1, publico: p.pventa2 || 0 });
     }
     renderPreciosClienteEdicion();
     setTimeout(() => {
@@ -2653,6 +2668,8 @@ function imprimirBoucherHTML(venta) {
 // imprimir. Se mantiene el mismo nombre de función para no tener que tocar
 // ningún otro lugar del código que ya llama a imprimirBoucher(venta).
 async function imprimirBoucher(venta) {
+  // Sin QZ Tray (librería no cargada) se usa la impresión normal del navegador.
+  if (typeof qz === 'undefined') { imprimirBoucherHTML(venta); return; }
   try {
     const ticket = construirTicketVentaPOS(venta);
     await posImprimir(ticket);
@@ -3553,6 +3570,532 @@ async function guardarConfig() {
 }
 
 // =============================================
+// LIQUIDACIÓN DE VENDEDORES
+// =============================================
+// Cada vendedor es un cliente que tiene su lista fija de precios
+// (precio de lista = lo que le cobra la heladería, precio público = lo que
+// él vende). Se anota lo que se lleva (cargue / recargue) y lo que regresa
+// (devolución); la página calcula lo vendido, lo que debe pagar y su ganancia.
+// Cargue/recargue descuentan del inventario y la devolución lo regresa.
+let liqActual = null;   // liquidación en edición (copia de trabajo)
+
+function liqNum(v) { return Math.max(0, parseFloat(v) || 0); }
+
+function liqCalcItem(it) {
+  const venta = Math.max(0, liqNum(it.cargue) + liqNum(it.recargue) - liqNum(it.devolucion));
+  const lista = liqNum(it.precioLista), pub = liqNum(it.precioPublico);
+  return { venta, valor: venta * lista, ventaCI: venta * pub, ganancia: venta * (pub - lista) };
+}
+
+function liqTotales(l) {
+  const t = { unidades: 0, total: 0, ventaCI: 0, ganancia: 0 };
+  (l.items || []).forEach(it => {
+    const c = liqCalcItem(it);
+    t.unidades += c.venta; t.total += c.valor; t.ventaCI += c.ventaCI; t.ganancia += c.ganancia;
+  });
+  t.pagado = (l.pagos || []).reduce((a, x) => a + (Number(x.monto) || 0), 0);
+  t.saldo = Math.max(0, t.total - t.pagado);
+  return t;
+}
+
+function liqClonar(l) { return JSON.parse(JSON.stringify(l)); }
+
+function liqItemsDesdeVendedor(c) {
+  return (c.precios || []).map(x => ({
+    productoId: x.productoId, ref: x.ref || '', nombre: x.nombre || '',
+    cargue: 0, recargue: 0, devolucion: 0,
+    precioLista: Number(x.precio) || 0, precioPublico: Number(x.publico) || 0, aplicado: 0
+  }));
+}
+
+function liqBorradorNuevo(c) {
+  const ahora = new Date();
+  return { id: uid(), clienteId: c.id, nombre: c.nombre, fecha: fechaCO(ahora), hora: horaCO(ahora),
+           items: liqItemsDesdeVendedor(c), pagos: [], nota: '' };
+}
+
+function parsearLiquidacion(f) {
+  const items = parsearJSON(f[5]);
+  const pagos = parsearJSON(f[10]);
+  const hora = String(f[4] || '');
+  return {
+    id: String(f[0]), clienteId: String(f[1] || ''), nombre: String(f[2] || ''),
+    fecha: isoAFechaCO(f[3]), hora: /^\d{4}-\d{2}-\d{2}T/.test(hora) ? '' : hora,
+    items: Array.isArray(items) ? items : [], pagos: Array.isArray(pagos) ? pagos : [],
+    nota: String(f[11] || '')
+  };
+}
+
+function liqFila(l) {
+  const t = liqTotales(l);
+  return [l.id, l.clienteId, l.nombre, l.fecha, l.hora, JSON.stringify(l.items),
+          t.unidades, t.total, t.ventaCI, t.ganancia, JSON.stringify(l.pagos || []), l.nota || ''];
+}
+
+function liqVendedorActual() {
+  return liqActual ? DB.clientes.find(c => c.id === liqActual.clienteId) : null;
+}
+
+// ---------- vendedor ----------
+function liqMostrarVendedor() {
+  const box = document.getElementById('liq-cliente-seleccionado');
+  const prod = document.getElementById('liq-producto-box');
+  if (!liqActual) { box.classList.add('hidden'); prod.classList.add('hidden'); return; }
+  const c = liqVendedorActual();
+  document.getElementById('liq-cliente-nombre').textContent = liqActual.nombre;
+  document.getElementById('liq-cliente-detalle').textContent = c
+    ? `${c.tipoDoc || 'CC'} ${c.cedula}${c.telefono ? ' · Tel: ' + c.telefono : ''} · ${(c.precios || []).length} producto(s) con precio`
+    : 'Cliente ya no existe en la lista';
+  box.classList.remove('hidden');
+  prod.classList.remove('hidden');
+}
+
+function seleccionarVendedorLiq(c) {
+  const hoy = fechaCO();
+  const delDia = DB.liquidaciones.filter(l => l.clienteId === c.id && l.fecha === hoy);
+  liqActual = delDia.length ? liqClonar(delDia[delDia.length - 1]) : liqBorradorNuevo(c);
+  liqMostrarVendedor();
+  renderLiqEditor();
+}
+
+function quitarVendedorLiq() {
+  liqActual = null;
+  liqMostrarVendedor();
+  renderLiqEditor();
+}
+
+function nuevaLiquidacion() {
+  const c = liqVendedorActual();
+  if (!c) { alert('Primero elige el vendedor.'); return; }
+  if (!confirm('¿Empezar una liquidación nueva para ' + c.nombre + '? Lo que no hayas guardado se pierde.')) return;
+  liqActual = liqBorradorNuevo(c);
+  liqMostrarVendedor();
+  renderLiqEditor();
+}
+
+function abrirLiquidacion(id) {
+  const l = DB.liquidaciones.find(x => x.id === id);
+  if (!l) return;
+  liqActual = liqClonar(l);
+  liqMostrarVendedor();
+  renderLiqEditor();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---------- productos ----------
+function agregarProductoLiq(p) {
+  if (!liqActual) { alert('Primero elige el vendedor.'); return; }
+  let i = liqActual.items.findIndex(x => x.productoId === p.id);
+  if (i < 0) {
+    const c = liqVendedorActual();
+    const esp = c && (c.precios || []).find(x => x.productoId === p.id);
+    liqActual.items.push({
+      productoId: p.id, ref: p.ref, nombre: p.nombre, cargue: 0, recargue: 0, devolucion: 0,
+      precioLista: esp ? Number(esp.precio) : p.pventa1,
+      precioPublico: (esp && esp.publico) ? Number(esp.publico) : (p.pventa2 || p.pventa1),
+      aplicado: 0
+    });
+    i = liqActual.items.length - 1;
+  }
+  renderLiqEditor();
+  setTimeout(() => {
+    const inp = document.querySelector(`#liq-editor tr[data-i="${i}"] .liq-in`);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+// ---------- edición ----------
+function liqRefrescarFila(i) {
+  const it = liqActual.items[i];
+  const tr = document.querySelector(`#liq-editor tr[data-i="${i}"]`);
+  if (!tr) return;
+  const c = liqCalcItem(it);
+  tr.querySelector('.c-venta').textContent = c.venta;
+  tr.querySelector('.c-valor').textContent = fmt(c.valor);
+  tr.querySelector('.c-ventaci').textContent = fmt(c.ventaCI);
+  tr.querySelector('.c-ganancia').textContent = fmt(c.ganancia);
+}
+
+function liqRefrescarTotales() {
+  if (!liqActual) return;
+  const t = liqTotales(liqActual);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('liq-m-unidades', t.unidades);
+  set('liq-m-total', fmt(t.total));
+  set('liq-m-ventaci', fmt(t.ventaCI));
+  set('liq-m-ganancia', fmt(t.ganancia));
+  set('liq-m-pagado', fmt(t.pagado));
+  set('liq-m-saldo', fmt(t.saldo));
+  set('liq-f-venta', t.unidades);
+  set('liq-f-valor', fmt(t.total));
+  set('liq-f-ventaci', fmt(t.ventaCI));
+  set('liq-f-ganancia', fmt(t.ganancia));
+}
+
+function renderLiqEditor() {
+  const cont = document.getElementById('liq-editor');
+  if (!cont) return;
+  if (!liqActual) {
+    cont.innerHTML = `<div class="estado-vacio"><i class="ti ti-truck-delivery"></i><p>Elige un vendedor para armar su liquidación.</p></div>`;
+    return;
+  }
+  const l = liqActual;
+  const guardada = !!DB.liquidaciones.find(x => x.id === l.id);
+  const t = liqTotales(l);
+
+  const inp = (i, campo, valor, ancho) =>
+    `<input type="number" min="0" class="liq-in" data-i="${i}" data-f="${campo}" value="${valor ? valor : ''}" placeholder="0" style="width:${ancho || 56}px">`;
+
+  const filas = l.items.map((it, i) => {
+    const c = liqCalcItem(it);
+    return `<tr data-i="${i}">
+      <td style="min-width:150px">${esc(it.nombre)}<div style="font-size:11px;color:var(--texto2)">${esc(it.ref || '')}</div></td>
+      <td>${inp(i, 'cargue', it.cargue)}</td>
+      <td>${inp(i, 'recargue', it.recargue)}</td>
+      <td>${inp(i, 'devolucion', it.devolucion)}</td>
+      <td class="c-venta" style="font-weight:600;text-align:center">${c.venta}</td>
+      <td>${inp(i, 'precioLista', it.precioLista, 74)}</td>
+      <td class="c-valor">${fmt(c.valor)}</td>
+      <td>${inp(i, 'precioPublico', it.precioPublico, 74)}</td>
+      <td class="c-ventaci">${fmt(c.ventaCI)}</td>
+      <td class="c-ganancia" style="color:var(--rosa-oscuro);font-weight:500">${fmt(c.ganancia)}</td>
+      <td><button type="button" class="btn-peligro btn-quitar-liq-item" data-i="${i}" style="padding:5px 9px"><i class="ti ti-x"></i></button></td>
+    </tr>`;
+  }).join('');
+
+  const pagos = (l.pagos || []).map((p, i) => `
+    <tr><td>${i + 1}</td><td>${esc(p.fecha || '')} ${esc(p.hora || '')}</td>
+    <td>${p.metodoPago === 'transferencia' ? '🏦 Transferencia' : '💵 Efectivo'}</td>
+    <td style="text-align:right">${fmt(p.monto)}</td></tr>`).join('');
+
+  cont.innerHTML = `
+    <div id="liq-metrics">
+      <div class="metric"><div class="mlabel">Total unidades</div><div class="mvalue" id="liq-m-unidades">${t.unidades}</div></div>
+      <div class="metric rosa"><div class="mlabel">Total a pagar (venta)</div><div class="mvalue" id="liq-m-total">${fmt(t.total)}</div></div>
+      <div class="metric"><div class="mlabel">Venta al público</div><div class="mvalue" id="liq-m-ventaci">${fmt(t.ventaCI)}</div></div>
+      <div class="metric"><div class="mlabel">Ganancia vendedor</div><div class="mvalue" id="liq-m-ganancia">${fmt(t.ganancia)}</div></div>
+      <div class="metric"><div class="mlabel">Pagado</div><div class="mvalue" id="liq-m-pagado">${fmt(t.pagado)}</div></div>
+      <div class="metric alerta"><div class="mlabel">Saldo</div><div class="mvalue" id="liq-m-saldo">${fmt(t.saldo)}</div></div>
+    </div>
+    <p style="font-size:12px;color:var(--texto2);margin-bottom:8px">${esc(l.fecha)} ${esc(l.hora || '')} · ${guardada ? 'Guardada' : '<strong>Sin guardar</strong>'}. Venta = Cargue + Recargue − Devolución.</p>
+    ${l.items.length === 0 ? '<p style="font-size:13px;color:var(--texto2);margin:8px 0">Este vendedor no tiene lista de precios. Busca un producto arriba para agregarlo.</p>' : `
+    <div class="tabla-wrap"><table class="liq-tabla">
+      <thead><tr><th>Producto</th><th>Cargue</th><th>Recargue</th><th>Devolución</th><th>Venta</th><th>Precio lista</th><th>Valor total</th><th>Precio público</th><th>Venta CI</th><th>Ganancia CI</th><th></th></tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr style="font-weight:600">
+        <td colspan="4">TOTAL</td><td id="liq-f-venta" style="text-align:center">${t.unidades}</td><td></td>
+        <td id="liq-f-valor">${fmt(t.total)}</td><td></td><td id="liq-f-ventaci">${fmt(t.ventaCI)}</td><td id="liq-f-ganancia">${fmt(t.ganancia)}</td><td></td>
+      </tr></tfoot>
+    </table></div>`}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:1rem 0">
+      <button class="btn-primary" id="btn-liq-guardar"><i class="ti ti-device-floppy"></i> Guardar liquidación</button>
+      <button class="btn-primary" id="btn-liq-pago"><i class="ti ti-cash"></i> Registrar pago</button>
+      <button class="btn-secundario" id="btn-liq-imprimir"><i class="ti ti-printer"></i> Imprimir</button>
+      <button class="btn-secundario" id="btn-liq-precios"><i class="ti ti-tags"></i> Guardar precios al vendedor</button>
+    </div>
+    ${pagos ? `<p style="font-size:13px;font-weight:500;margin-bottom:6px">Pagos registrados</p>
+      <div class="tabla-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Método</th><th>Monto</th></tr></thead><tbody>${pagos}</tbody></table></div>` : ''}
+  `;
+
+  const entradas = Array.from(cont.querySelectorAll('.liq-in'));
+  entradas.forEach((el, idx) => {
+    el.addEventListener('input', () => {
+      const i = parseInt(el.dataset.i);
+      liqActual.items[i][el.dataset.f] = parseFloat(el.value) || 0;
+      liqRefrescarFila(i);
+      liqRefrescarTotales();
+    });
+    el.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const sig = entradas[idx + 1];
+      if (sig) { sig.focus(); sig.select(); }
+    });
+  });
+  cont.querySelectorAll('.btn-quitar-liq-item').forEach(b => b.addEventListener('click', () => {
+    liqActual.items.splice(parseInt(b.dataset.i), 1);
+    renderLiqEditor();
+  }));
+  document.getElementById('btn-liq-guardar').addEventListener('click', () => guardarLiquidacion());
+  document.getElementById('btn-liq-pago').addEventListener('click', abrirModalPagoLiq);
+  document.getElementById('btn-liq-imprimir').addEventListener('click', () => imprimirLiquidacion(liqActual));
+  document.getElementById('btn-liq-precios').addEventListener('click', guardarPreciosVendedorDesdeLiq);
+}
+
+// ---------- guardar ----------
+async function guardarLiquidacion() {
+  if (!liqActual) return false;
+  const l = liqActual;
+  if (!l.items.some(it => liqNum(it.cargue) + liqNum(it.recargue) > 0)) {
+    alert('Anota el cargue de al menos un producto antes de guardar.');
+    return false;
+  }
+  const btn = document.getElementById('btn-liq-guardar');
+  if (btn && btn.disabled) return false;
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  try {
+    const prev = DB.liquidaciones.find(x => x.id === l.id);
+    const esNuevo = !prev;
+    const items = l.items.map(it => ({
+      ...it,
+      cargue: liqNum(it.cargue), recargue: liqNum(it.recargue), devolucion: liqNum(it.devolucion),
+      precioLista: liqNum(it.precioLista), precioPublico: liqNum(it.precioPublico),
+      aplicado: liqCalcItem(it).venta
+    }));
+    const nueva = { ...liqClonar(l), items };
+
+    const ok = await sheetsEscribir(esNuevo ? 'append' : 'update', 'Liquidaciones', liqFila(nueva), esNuevo ? undefined : nueva.id);
+    if (!ok) throw new Error('Google Sheets no confirmó el guardado de la liquidación.');
+
+    // Inventario: se descuenta lo vendido (cargue + recargue − devolución)
+    // y solo se mueve la diferencia contra lo que ya se había aplicado.
+    const previo = {}, actual = {};
+    (prev ? prev.items : []).forEach(it => { if (it.productoId) previo[it.productoId] = (previo[it.productoId] || 0) + (Number(it.aplicado) || 0); });
+    items.forEach(it => { if (it.productoId) actual[it.productoId] = (actual[it.productoId] || 0) + it.aplicado; });
+    for (const pid of new Set([...Object.keys(previo), ...Object.keys(actual)])) {
+      const delta = (actual[pid] || 0) - (previo[pid] || 0);
+      if (!delta) continue;
+      const p = DB.productos.find(x => x.id === pid);
+      if (p) {
+        p.stock = p.stock - delta;
+        await sheetsEscribir('update', 'Productos', [p.id, p.ref, p.nombre, p.pcompra, p.pventa1, p.pventa2, p.stock], p.id);
+      }
+    }
+
+    if (esNuevo) DB.liquidaciones.push(nueva);
+    else DB.liquidaciones[DB.liquidaciones.findIndex(x => x.id === nueva.id)] = nueva;
+    liqActual = liqClonar(nueva);
+    guardarLocal();
+    renderLiqEditor();
+    renderLiqHistorial();
+    mostrarToast('Liquidación guardada ✓');
+    return true;
+  } catch (e) {
+    console.error('Error guardando liquidación:', e);
+    alert('NO SE PUDO GUARDAR LA LIQUIDACIÓN.\n\n' + (e && e.message ? e.message : String(e)));
+    return false;
+  } finally {
+    const b = document.getElementById('btn-liq-guardar');
+    if (b) { b.disabled = false; b.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar liquidación'; }
+  }
+}
+
+async function guardarPreciosVendedorDesdeLiq() {
+  const c = liqVendedorActual();
+  if (!c) { alert('El vendedor ya no existe en Clientes.'); return; }
+  if (!confirm('¿Dejar estos precios (lista y público) como los precios fijos de ' + c.nombre + '?')) return;
+  liqActual.items.forEach(it => {
+    const x = (c.precios || []).find(e => e.productoId === it.productoId);
+    if (x) { x.precio = liqNum(it.precioLista); x.publico = liqNum(it.precioPublico); }
+    else {
+      c.precios = c.precios || [];
+      c.precios.push({ productoId: it.productoId, ref: it.ref || '', nombre: it.nombre || '', precio: liqNum(it.precioLista), publico: liqNum(it.precioPublico) });
+    }
+  });
+  const ok = await sheetsEscribir('update', 'Clientes', [c.id, c.nombre, c.cedula, c.telefono, c.direccion, c.correo, c.tipoDoc, JSON.stringify(c.precios)], c.id);
+  guardarLocal();
+  if (ok) { mostrarToast('Precios del vendedor guardados ✓'); liqMostrarVendedor(); }
+  else alert('No se pudieron guardar los precios del vendedor en Google Sheets.');
+}
+
+// ---------- pagos ----------
+async function abrirModalPagoLiq() {
+  if (!liqActual) return;
+  const ok = await guardarLiquidacion();
+  if (!ok) return;
+  const t = liqTotales(liqActual);
+  if (t.saldo <= 0) { alert('Esta liquidación ya está pagada por completo.'); return; }
+  document.getElementById('liq-pago-nombre').textContent = liqActual.nombre;
+  document.getElementById('liq-pago-saldo').textContent = `Saldo pendiente: ${fmt(t.saldo)}`;
+  document.getElementById('liq-pago-monto').value = t.saldo;
+  document.querySelector('input[name="liq-pago-metodo"][value="efectivo"]').checked = true;
+  abrirModal('modal-liq-pago');
+  setTimeout(() => { const m = document.getElementById('liq-pago-monto'); m.focus(); m.select(); }, 100);
+}
+
+async function guardarPagoLiq() {
+  const l = liqActual ? DB.liquidaciones.find(x => x.id === liqActual.id) : null;
+  if (!l) return;
+  const t = liqTotales(l);
+  const monto = parseFloat(document.getElementById('liq-pago-monto').value) || 0;
+  if (monto <= 0) { alert('Ingresa un monto válido'); return; }
+  if (monto > t.saldo) { alert(`El pago no puede ser mayor al saldo pendiente (${fmt(t.saldo)})`); return; }
+  const metodoPago = document.querySelector('input[name="liq-pago-metodo"]:checked').value;
+
+  const btn = document.getElementById('btn-guardar-liq-pago');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Guardando...';
+
+  const ahora = new Date();
+  const pago = { id: uid(), monto, metodoPago, fecha: fechaCO(ahora), hora: horaCO(ahora) };
+  let venta = null;
+  try {
+    // El pago entra a la caja del día como una venta más (igual que un abono).
+    const gananciaNegocio = l.items.reduce((a, it) => {
+      const p = DB.productos.find(x => x.id === it.productoId);
+      return a + (liqNum(it.precioLista) - (p ? p.pcompra : 0)) * liqCalcItem(it).venta;
+    }, 0);
+    const gananciaPago = t.total > 0 ? monto * (gananciaNegocio / t.total) : 0;
+    venta = {
+      id: uid(), fecha: pago.fecha, hora: pago.hora, total: monto, ganancia: gananciaPago,
+      nota: 'Liquidación vendedor: ' + l.nombre, metodoPago,
+      items: [{ ref: '-', nombre: 'Liquidación — ' + l.nombre, cantidad: 1, precio: monto, total: monto }],
+      clienteId: l.clienteId, clienteNombre: l.nombre, clienteCedula: '', clienteTelefono: '', clienteDireccion: '',
+      pagadoAhora: monto, saldoPendiente: Math.max(0, t.saldo - monto)
+    };
+    DB.ventas.push(venta);
+    const okV = await sheetsEscribir('append', 'Ventas', [venta.id, venta.fecha, venta.hora, venta.total, venta.ganancia, venta.nota, venta.metodoPago, JSON.stringify(venta.items), venta.clienteId, venta.clienteNombre, venta.clienteCedula, venta.clienteTelefono, venta.clienteDireccion, venta.pagadoAhora, venta.saldoPendiente]);
+    if (!okV) throw new Error('No se pudo guardar el pago en la hoja Ventas.');
+
+    pago.ventaId = venta.id;
+    l.pagos = l.pagos || [];
+    l.pagos.push(pago);
+    const okL = await sheetsEscribir('update', 'Liquidaciones', liqFila(l), l.id);
+    if (!okL) {
+      l.pagos.pop();
+      await sheetsEscribir('delete', 'Ventas', null, venta.id);
+      throw new Error('Google Sheets no confirmó la actualización de la liquidación.');
+    }
+
+    liqActual = liqClonar(l);
+    guardarLocal();
+    cerrarModal('modal-liq-pago');
+    renderLiqEditor();
+    renderLiqHistorial();
+    mostrarToast(liqTotales(l).saldo <= 0 ? 'Liquidación pagada completamente ✓' : `Pago guardado ✓ · ${fmt(monto)}`);
+  } catch (e) {
+    if (venta) DB.ventas = DB.ventas.filter(v => v.id !== venta.id);
+    guardarLocal();
+    console.error('Error guardando pago de liquidación:', e);
+    alert('NO SE PUDO GUARDAR EL PAGO.\n\n' + (e && e.message ? e.message : String(e)));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Registrar pago';
+  }
+}
+
+// ---------- eliminar ----------
+async function eliminarLiquidacion(id) {
+  const l = DB.liquidaciones.find(x => x.id === id);
+  if (!l) return;
+  const t = liqTotales(l);
+  let msg = `¿Eliminar la liquidación de ${l.nombre} (${l.fecha})?\n\nLos productos vendidos vuelven al inventario.`;
+  if ((l.pagos || []).length) msg += `\nTambién se borran sus pagos (${fmt(t.pagado)}) de las ventas del día.`;
+  if (!confirm(msg)) return;
+
+  const ok = await sheetsEscribir('delete', 'Liquidaciones', null, id);
+  if (!ok) { alert('No se pudo eliminar la liquidación en Google Sheets.'); return; }
+
+  for (const p of (l.pagos || [])) {
+    if (!p.ventaId) continue;
+    await sheetsEscribir('delete', 'Ventas', null, p.ventaId);
+    DB.ventas = DB.ventas.filter(v => v.id !== p.ventaId);
+  }
+  for (const it of (l.items || [])) {
+    const aplicado = Number(it.aplicado) || 0;
+    const p = DB.productos.find(x => x.id === it.productoId);
+    if (p && aplicado) {
+      p.stock = p.stock + aplicado;
+      await sheetsEscribir('update', 'Productos', [p.id, p.ref, p.nombre, p.pcompra, p.pventa1, p.pventa2, p.stock], p.id);
+    }
+  }
+  DB.liquidaciones = DB.liquidaciones.filter(x => x.id !== id);
+  if (liqActual && liqActual.id === id) { liqActual = null; liqMostrarVendedor(); renderLiqEditor(); }
+  guardarLocal();
+  renderLiqHistorial();
+  mostrarToast('Liquidación eliminada');
+}
+
+// ---------- historial ----------
+function renderLiqHistorial() {
+  const cont = document.getElementById('liq-historial');
+  if (!cont) return;
+  const q = (document.getElementById('liq-hist-buscar')?.value || '').toLowerCase().trim();
+  const lista = DB.liquidaciones.filter(l => !q || l.nombre.toLowerCase().includes(q)).slice().reverse();
+  if (lista.length === 0) {
+    cont.innerHTML = `<div class="estado-vacio"><i class="ti ti-truck-delivery"></i><p>Sin liquidaciones registradas.</p></div>`;
+    return;
+  }
+  const filas = lista.map(l => {
+    const t = liqTotales(l);
+    const badge = t.total > 0 && t.saldo <= 0 ? '<span class="badge ok">Pagada</span>'
+      : t.pagado > 0 ? '<span class="badge alerta">Abonada</span>' : '<span class="badge danger">Pendiente</span>';
+    return `<tr>
+      <td>${esc(l.fecha)}<div style="font-size:11px;color:var(--texto2)">${esc(l.hora || '')}</div></td>
+      <td>${esc(l.nombre)}</td>
+      <td style="text-align:center">${t.unidades}</td>
+      <td>${fmt(t.total)}</td>
+      <td>${fmt(t.pagado)}</td>
+      <td style="font-weight:500">${fmt(t.saldo)}</td>
+      <td>${badge}</td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-primary btn-abrir-liq" data-id="${l.id}" style="padding:6px 10px" title="Abrir / editar"><i class="ti ti-edit"></i></button>
+        <button class="btn-secundario btn-imprimir-liq" data-id="${l.id}" style="padding:6px 10px" title="Imprimir"><i class="ti ti-printer"></i></button>
+        <button class="btn-peligro btn-eliminar-liq" data-id="${l.id}" style="padding:6px 10px" title="Eliminar"><i class="ti ti-trash"></i></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `<div class="tabla-wrap"><table>
+    <thead><tr><th>Fecha</th><th>Vendedor</th><th>Unid.</th><th>Total a pagar</th><th>Pagado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+  cont.querySelectorAll('.btn-abrir-liq').forEach(b => b.addEventListener('click', () => abrirLiquidacion(b.dataset.id)));
+  cont.querySelectorAll('.btn-imprimir-liq').forEach(b => b.addEventListener('click', () => {
+    const l = DB.liquidaciones.find(x => x.id === b.dataset.id); if (l) imprimirLiquidacion(l);
+  }));
+  cont.querySelectorAll('.btn-eliminar-liq').forEach(b => b.addEventListener('click', () => eliminarLiquidacion(b.dataset.id)));
+}
+
+// ---------- impresión ----------
+function imprimirLiquidacion(l) {
+  if (!l) return;
+  const t = liqTotales(l);
+  const conMovimiento = l.items.filter(it => liqNum(it.cargue) + liqNum(it.recargue) + liqNum(it.devolucion) > 0);
+  if (conMovimiento.length === 0) { alert('No hay productos con cargue para imprimir.'); return; }
+  const n = v => (liqNum(v) ? liqNum(v) : '');
+
+  const filas = conMovimiento.map(it => {
+    const c = liqCalcItem(it);
+    return `<tr>
+      <td>${esc(it.nombre)}</td>
+      <td class="num">${n(it.cargue)}</td><td class="num">${n(it.recargue)}</td><td class="num">${n(it.devolucion)}</td>
+      <td class="num"><strong>${c.venta}</strong></td>
+      <td class="num">${fmt(liqNum(it.precioLista))}</td><td class="num">${fmt(c.valor)}</td>
+      <td class="num">${fmt(liqNum(it.precioPublico))}</td><td class="num">${fmt(c.ventaCI)}</td><td class="num">${fmt(c.ganancia)}</td>
+    </tr>`;
+  }).join('');
+
+  const pagos = (l.pagos || []).map((p, i) => `
+    <tr><td>${i + 1}</td><td>${esc(p.fecha || '')} ${esc(p.hora || '')}</td>
+    <td>${p.metodoPago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</td><td class="num">${fmt(p.monto)}</td></tr>`).join('');
+
+  document.getElementById('liquidacion-print-contenido').innerHTML = `
+    <div id="tp-header">
+      <h1>Crem Helado</h1>
+      <p>Liquidación de vendedor</p>
+    </div>
+    <div id="tp-meta">
+      <span><strong>Vendedor:</strong> ${esc(l.nombre)}</span>
+      <span><strong>Fecha:</strong> ${esc(l.fecha)} ${esc(l.hora || '')}</span>
+    </div>
+    <table>
+      <thead><tr><th>Producto</th><th class="num">Cargue</th><th class="num">Recargue</th><th class="num">Devol.</th><th class="num">Venta</th>
+      <th class="num">P. lista</th><th class="num">Valor total</th><th class="num">P. público</th><th class="num">Venta CI</th><th class="num">Ganancia CI</th></tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr style="font-weight:700"><td colspan="4">TOTAL</td><td class="num">${t.unidades}</td><td></td>
+        <td class="num">${fmt(t.total)}</td><td></td><td class="num">${fmt(t.ventaCI)}</td><td class="num">${fmt(t.ganancia)}</td></tr></tfoot>
+    </table>
+    <p style="margin-top:12px;font-size:14px"><strong>Total a pagar: ${fmt(t.total)}</strong> · Pagado: ${fmt(t.pagado)} · <strong>Saldo: ${fmt(t.saldo)}</strong></p>
+    ${pagos ? `<p style="margin-top:10px;font-size:12px"><strong>Pagos realizados</strong></p>
+      <table style="width:60%"><thead><tr><th>#</th><th>Fecha</th><th>Método</th><th class="num">Monto</th></tr></thead><tbody>${pagos}</tbody></table>` : ''}
+    <div id="tp-firmas">
+      <div class="tp-firma"><div class="tp-linea"></div>Vendedor</div>
+      <div class="tp-firma"><div class="tp-linea"></div>Recibe — Crem Helado</div>
+    </div>`;
+  prepararImpresion('liquidacion-print');
+  window.print();
+}
+
+// =============================================
 // NAVEGACIÓN CON TECLADO
 // =============================================
 // Permite moverse con ↑/↓ entre botones/campos de un contenedor (Enter ya activa el botón enfocado)
@@ -3597,6 +4140,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!DB.proveedores) DB.proveedores = [];
   if (!DB.gastos) DB.gastos = [];
   if (!DB.traslados) DB.traslados = [];
+  if (!DB.liquidaciones) DB.liquidaciones = [];
 
   // Sesión persistente
   const sesionGuardada = cargarSesion();
@@ -3863,6 +4407,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reportes
   document.querySelectorAll('.btn-reporte').forEach(b=>
     b.addEventListener('click',()=> renderReportes(b.dataset.periodo)));
+
+  // Liquidación de vendedores
+  inicializarBuscadorCliente('liq', 'liq-cliente-buscar', 'liq-cliente-resultados', seleccionarVendedorLiq);
+  document.getElementById('btn-quitar-cliente-liq').addEventListener('click', quitarVendedorLiq);
+  inicializarBuscadorProducto('liq', 'liq-producto-buscar', 'liq-producto-resultados', agregarProductoLiq);
+  document.getElementById('btn-liq-nueva').addEventListener('click', nuevaLiquidacion);
+  document.getElementById('liq-hist-buscar').addEventListener('input', renderLiqHistorial);
+  document.getElementById('btn-guardar-liq-pago').addEventListener('click', guardarPagoLiq);
+  document.getElementById('liq-pago-monto').addEventListener('keydown', e => { if (e.key==='Enter') guardarPagoLiq(); });
 
   // Config
   document.getElementById('btn-agregar-usuario').addEventListener('click', agregarUsuario);

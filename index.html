@@ -1,4 +1,6 @@
-<html lang="es"><head>
+<!DOCTYPE html>
+<html lang="es">
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Crem Helado</title>
@@ -8,7 +10,7 @@
 </head>
 <body>
 
-  <div id="login-screen" class="hidden">
+  <div id="login-screen">
     <div class="login-box">
       <i class="ti ti-ice-cream-2 login-icon"></i>
       <h1>Crem Helado</h1>
@@ -22,7 +24,7 @@
     </div>
   </div>
 
-  <div id="app" class="">
+  <div id="app" class="hidden">
     <div id="sidebar-backdrop"></div>
     <div id="app-shell">
       <aside id="sidebar">
@@ -38,6 +40,7 @@
           <button class="nav-tab" data-tab="inventario"><i class="ti ti-package"></i> Inventario</button>
           <button class="nav-tab" data-tab="ventas"><i class="ti ti-shopping-bag"></i> Vender</button>
           <button class="nav-tab" data-tab="clientes"><i class="ti ti-address-book"></i> Clientes</button>
+          <button class="nav-tab" data-tab="liquidacion"><i class="ti ti-truck-delivery"></i> Liquidación</button>
           <button class="nav-tab" data-tab="cotizacion"><i class="ti ti-file-invoice"></i> Cotización</button>
           <button class="nav-tab" data-tab="traslado"><i class="ti ti-truck"></i> Traslado</button>
           <button class="nav-tab" data-tab="deudores"><i class="ti ti-users"></i> Deudores</button>
@@ -54,8 +57,8 @@
         <div id="topbar">
           <button id="btn-menu-toggle" aria-label="Abrir menú"><i class="ti ti-menu-2"></i></button>
           <div id="topbar-right">
-            <span id="sync-status" class="conectado">Conectado</span>
-            <span id="topbar-user">KEVIN · admin</span>
+            <span id="sync-status" class="cargando">Sincronizando...</span>
+            <span id="topbar-user"></span>
             <button id="btn-logout">Salir</button>
           </div>
         </div>
@@ -64,44 +67,14 @@
 
       <!-- DASHBOARD -->
       <section id="panel-dashboard" class="panel active">
-        <p id="dash-fecha">Hoy · viernes, 4 de septiembre de 2026</p>
-        <div id="dash-metrics">
-    <div class="metric rosa"><div class="mlabel">Total vendido hoy</div><div class="mvalue">$84.000</div></div>
-    <div class="metric"><div class="mlabel">Transacciones</div><div class="mvalue">2</div></div>
-    <div class="metric"><div class="mlabel">Productos</div><div class="mvalue">1072</div></div>
-    <div class="metric alerta"><div class="mlabel">Stock bajo</div><div class="mvalue">764</div></div>
-    <div class="metric danger"><div class="mlabel">Sin stock</div><div class="mvalue">14</div></div>
-    <div class="metric danger"><div class="mlabel">Deudas vencidas</div><div class="mvalue">1</div></div>
-    
-    
-    
-  </div>
+        <p id="dash-fecha"></p>
+        <div id="dash-metrics"></div>
         <div class="card">
           <div class="section-header">
             <h2>Ventas de hoy</h2>
             <button class="btn-primary" data-goto="ventas">+ Nueva venta</button>
           </div>
-          <div id="dash-ventas-hoy"><div class="tabla-wrap"><table>
-    <thead><tr><th>Hora</th><th>Productos</th><th>Nota</th><th>Pago</th><th>Total</th><th>Ganancia</th><th></th></tr></thead>
-    <tbody>
-    <tr class="fila-venta-clickeable" data-id="4eszvmck3mimtmzq942">
-      <td>08:29 a. m.</td>
-      <td style="font-size:13px"></td>
-      <td style="font-size:13px;color:var(--texto2)">-</td>
-      <td><span class="badge verde">💵 Efectivo</span></td>
-      <td style="font-weight:500">$42.000</td>
-      <td style="color:var(--rosa-oscuro);font-weight:500">$15.000</td>
-      <td><i class="ti ti-receipt" style="color:var(--rosa-medio);font-size:16px"></i></td>
-    </tr>
-    <tr class="fila-venta-clickeable" data-id="omu21gqeq0bmtmzq34u">
-      <td>08:29 a. m.</td>
-      <td style="font-size:13px">BALINERA KOYO ORIGINAL 6202 x1, BALINERA KOYO ORIGINAL 6001 x2, BALINERA KOYO ORIGINAL 6000 x1, RETENEDOR CABEZOTE SHINDAIWA B-45 x1</td>
-      <td style="font-size:13px;color:var(--texto2)">-</td>
-      <td><span class="badge verde">💵 Efectivo</span></td>
-      <td style="font-weight:500">$42.000</td>
-      <td style="color:var(--rosa-oscuro);font-weight:500">$15.000</td>
-      <td><i class="ti ti-receipt" style="color:var(--rosa-medio);font-size:16px"></i></td>
-    </tr></tbody></table></div></div>
+          <div id="dash-ventas-hoy"></div>
         </div>
       </section>
 
@@ -195,6 +168,45 @@
           </div>
           <input type="text" id="clientes-search" placeholder="Buscar por nombre o cédula/NIT...">
           <div id="clientes-contenido"></div>
+        </div>
+      </section>
+
+      <!-- LIQUIDACIÓN DE VENDEDORES -->
+      <section id="panel-liquidacion" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Liquidación de vendedores</h2>
+            <button class="btn-secundario" id="btn-liq-nueva"><i class="ti ti-file-plus"></i> Nueva liquidación</button>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">Elige el vendedor (un cliente con su lista de precios). El cargue y la recarga descuentan del inventario; la devolución lo regresa.</p>
+
+          <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Vendedor</p>
+          <div id="liq-cliente-busqueda-box">
+            <input type="text" id="liq-cliente-buscar" placeholder="Buscar vendedor por nombre o cédula...">
+            <div id="liq-cliente-resultados"></div>
+          </div>
+          <div id="liq-cliente-seleccionado" class="producto-seleccionado-box hidden">
+            <div class="producto-seleccionado-info">
+              <strong id="liq-cliente-nombre"></strong>
+              <span id="liq-cliente-detalle"></span>
+            </div>
+            <button type="button" class="btn-peligro" id="btn-quitar-cliente-liq" style="padding:6px 10px"><i class="ti ti-x"></i></button>
+          </div>
+
+          <div id="liq-producto-box" class="hidden">
+            <input type="text" id="liq-producto-buscar" placeholder="Agregar otro producto (nombre o código)...">
+            <div id="liq-producto-resultados"></div>
+          </div>
+
+          <div id="liq-editor"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Liquidaciones realizadas</h2>
+            <input type="text" id="liq-hist-buscar" placeholder="Buscar por vendedor..." style="max-width:260px;margin:0">
+          </div>
+          <div id="liq-historial"></div>
         </div>
       </section>
 
@@ -512,6 +524,7 @@
       <input type="email" id="cliente-correo" placeholder="Correo">
       <div style="margin-top:6px;padding-top:10px;border-top:0.5px solid var(--borde)">
         <label style="font-size:12px;color:var(--texto2);display:block;margin-bottom:4px"><strong>Precios especiales de este cliente</strong> (opcional)</label>
+        <p style="font-size:11px;color:var(--texto2);margin-bottom:6px">Primer campo: precio de lista (lo que paga). Segundo: precio público (solo para liquidación de vendedores).</p>
         <div id="cliente-precios-lista"></div>
         <input type="text" id="cliente-precio-buscar" placeholder="Buscar producto para agregarle precio...">
         <div id="cliente-precio-resultados"></div>
@@ -652,6 +665,24 @@
     </div>
   </div>
 
+  <!-- MODAL: Pago de liquidación -->
+  <div id="modal-liq-pago" class="modal-bg hidden">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h3 id="liq-pago-nombre" style="font-size:16px"></h3>
+        <button class="btn-cerrar-modal" data-modal="modal-liq-pago">✕</button>
+      </div>
+      <p id="liq-pago-saldo" style="font-size:13px;color:var(--texto2);margin-bottom:10px"></p>
+      <input type="number" id="liq-pago-monto" min="0" placeholder="Monto que paga *">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
+      <div style="display:flex;gap:20px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="liq-pago-metodo" value="efectivo" checked> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="liq-pago-metodo" value="transferencia"> 🏦 Transferencia</label>
+      </div>
+      <button class="btn-primary" id="btn-guardar-liq-pago" style="width:100%">Registrar pago</button>
+    </div>
+  </div>
+
   <!-- MODAL: Registrar abono -->
   <div id="modal-abono" class="modal-bg hidden">
     <div class="modal" style="max-width:380px">
@@ -769,6 +800,11 @@
     <div id="traslado-print-contenido"></div>
   </div>
 
+  <!-- IMPRESIÓN: Liquidación de vendedor -->
+  <div id="liquidacion-print">
+    <div id="liquidacion-print-contenido"></div>
+  </div>
+
   <!-- IMPRESIÓN: Cotización -->
   <div id="cotizacion-print">
     <div id="cotizacion-print-contenido"></div>
@@ -790,7 +826,7 @@
     <div id="proveedor-print-contenido"></div>
   </div>
 
-  <div id="toast" class="">Datos sincronizados ✓</div>
+  <div id="toast"></div>
 
   <!-- NUEVO — Impresión térmica POS (CX-POS CX-20) vía QZ Tray.
        Requiere tener QZ Tray instalado y corriendo en el computador con

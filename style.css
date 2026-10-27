@@ -704,3 +704,25 @@ input:focus, select:focus { border-color: var(--rosa-medio); background: var(--c
   #traslado-print th, #traslado-print td, #venta-print th, #venta-print td, #deudor-print th, #deudor-print td, #proveedor-print th, #proveedor-print td, #cotizacion-print th, #cotizacion-print td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
   #traslado-print th, #venta-print th, #deudor-print th, #proveedor-print th, #cotizacion-print th { background: #eee; }
 }
+
+/* LIQUIDACIÓN DE VENDEDORES */
+#liq-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 1rem 0;
+}
+#liq-producto-box { margin-top: 0.5rem; }
+.liq-tabla th, .liq-tabla td { white-space: nowrap; }
+.liq-tabla td:first-child { white-space: normal; }
+.liq-tabla input[type="number"] { margin-bottom: 0; padding: 7px 8px; text-align: center; border-radius: 6px; }
+.liq-tabla tfoot td { border-top: 1px solid var(--borde); background: var(--blush-claro); }
+
+#liquidacion-print { display: none; }
+@media print {
+  #liquidacion-print.activo { display: block !important; width: 100%; padding: 20px; color: #000; }
+  #liquidacion-print table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  #liquidacion-print th, #liquidacion-print td { border: 1px solid #999; padding: 4px 6px; text-align: left; }
+  #liquidacion-print th { background: #eee; }
+  #liquidacion-print .num { text-align: right; }
+}
