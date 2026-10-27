@@ -439,7 +439,6 @@
       <input type="text" id="prod-ref" placeholder="Referencia / Código *">
       <input type="text" id="prod-nombre" placeholder="Nombre del producto *">
       <input type="number" id="prod-pcompra" placeholder="Precio de compra *">
-      <div id="prod-pcompra-iva" style="font-size:12px;color:var(--rosa-oscuro);margin:-8px 0 4px 2px"></div>
       <input type="number" id="prod-pventa1" placeholder="Precio de venta 1 (normal) *">
       <input type="number" id="prod-pventa2" placeholder="Precio de venta 2 (especial)">
       <input type="number" id="prod-stock" placeholder="Stock disponible *">
@@ -699,9 +698,17 @@
       <p id="liq-pago-saldo" style="font-size:13px;color:var(--texto2);margin-bottom:10px"></p>
       <input type="number" id="liq-pago-monto" min="0" placeholder="Monto que paga *">
       <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
-      <div style="display:flex;gap:20px;margin-bottom:14px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="liq-pago-metodo" value="efectivo" checked> 💵 Efectivo</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="liq-pago-metodo" value="transferencia"> 🏦 Transferencia</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="liq-pago-metodo" value="mixto"> 🔀 Mixto</label>
+      </div>
+      <div id="liq-pago-mixto-box" class="hidden" style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--texto2);display:block;margin-bottom:2px">Efectivo</label>
+        <input type="number" id="liq-pago-mixto-efectivo" min="0" value="0">
+        <label style="font-size:12px;color:var(--texto2);display:block;margin-bottom:2px">Transferencia</label>
+        <input type="number" id="liq-pago-mixto-transferencia" min="0" value="0">
+        <div id="liq-pago-mixto-restante" style="font-size:13px;font-weight:500"></div>
       </div>
       <button class="btn-primary" id="btn-guardar-liq-pago" style="width:100%">Registrar pago</button>
     </div>

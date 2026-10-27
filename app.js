@@ -2924,18 +2924,8 @@ function abrirModalProducto(id, codigoBarrasPrellenado) {
     // existe todavía, se deja ya escrito para no tener que digitarlo.
     if (codigoBarrasPrellenado) document.getElementById('prod-codigobarras').value = codigoBarrasPrellenado;
   }
-  actualizarPcompraIva();
   abrirModal('modal-producto');
   if (!id) setTimeout(() => document.getElementById(codigoBarrasPrellenado ? 'prod-ref' : 'prod-codigobarras').focus(), 100);
-}
-
-// Muestra, solo como referencia (no se guarda en ningún lado), el precio de
-// compra + IVA (19%), para ayudar a decidir el precio de venta.
-function actualizarPcompraIva() {
-  const el = document.getElementById('prod-pcompra-iva');
-  const pcompra = parseFloat(document.getElementById('prod-pcompra').value) || 0;
-  if (pcompra <= 0) { el.textContent = ''; return; }
-  el.textContent = `Costo + IVA (19%): ${fmt(pcompra * (1 + TASA_IVA))}`;
 }
 
 async function guardarProducto() {
@@ -3836,7 +3826,7 @@ function renderLiqEditor() {
 
   const pagos = (l.pagos || []).map((p, i) => `
     <tr><td>${i + 1}</td><td>${esc(p.fecha || '')} ${esc(p.hora || '')}</td>
-    <td>${p.metodoPago === 'transferencia' ? '🏦 Transferencia' : '💵 Efectivo'}</td>
+    <td>${liqTextoMetodo(p, true)}</td>
     <td style="text-align:right">${fmt(p.monto)}</td></tr>`).join('');
 
   cont.innerHTML = `
@@ -3971,6 +3961,26 @@ async function guardarPreciosVendedorDesdeLiq() {
 }
 
 // ---------- pagos ----------
+function liqTextoMetodo(p, conIconos) {
+  if (p.metodoPago === 'mixto') {
+    return conIconos
+      ? `🔀 Mixto <span style="font-size:11px;color:var(--texto2)">(💵 ${fmt(p.efectivo || 0)} + 🏦 ${fmt(p.transferencia || 0)})</span>`
+      : `Mixto (Efectivo ${fmt(p.efectivo || 0)} + Transferencia ${fmt(p.transferencia || 0)})`;
+  }
+  if (p.metodoPago === 'transferencia') return conIconos ? '🏦 Transferencia' : 'Transferencia';
+  return conIconos ? '💵 Efectivo' : 'Efectivo';
+}
+
+function liqActualizarMixto() {
+  const monto = parseFloat(document.getElementById('liq-pago-monto').value) || 0;
+  const ef = parseFloat(document.getElementById('liq-pago-mixto-efectivo').value) || 0;
+  const tr = parseFloat(document.getElementById('liq-pago-mixto-transferencia').value) || 0;
+  const dif = monto - ef - tr;
+  const el = document.getElementById('liq-pago-mixto-restante');
+  el.textContent = dif === 0 ? 'Cuadrado ✓' : (dif > 0 ? `Falta: ${fmt(dif)}` : `Sobra: ${fmt(-dif)}`);
+  el.style.color = dif === 0 ? 'var(--rosa-oscuro)' : '#A32D2D';
+}
+
 async function abrirModalPagoLiq() {
   if (!liqActual) return;
   const ok = await guardarLiquidacion();
@@ -3981,6 +3991,9 @@ async function abrirModalPagoLiq() {
   document.getElementById('liq-pago-saldo').textContent = `Saldo pendiente: ${fmt(t.saldo)}`;
   document.getElementById('liq-pago-monto').value = t.saldo;
   document.querySelector('input[name="liq-pago-metodo"][value="efectivo"]').checked = true;
+  document.getElementById('liq-pago-mixto-box').classList.add('hidden');
+  document.getElementById('liq-pago-mixto-efectivo').value = 0;
+  document.getElementById('liq-pago-mixto-transferencia').value = 0;
   abrirModal('modal-liq-pago');
   setTimeout(() => { const m = document.getElementById('liq-pago-monto'); m.focus(); m.select(); }, 100);
 }
@@ -3994,38 +4007,68 @@ async function guardarPagoLiq() {
   if (monto > t.saldo) { alert(`El pago no puede ser mayor al saldo pendiente (${fmt(t.saldo)})`); return; }
   const metodoPago = document.querySelector('input[name="liq-pago-metodo"]:checked').value;
 
+  // Partes del pago: una sola (efectivo o transferencia) o dos (mixto)
+  let partes;
+  if (metodoPago === 'mixto') {
+    const ef = parseFloat(document.getElementById('liq-pago-mixto-efectivo').value) || 0;
+    const tr = parseFloat(document.getElementById('liq-pago-mixto-transferencia').value) || 0;
+    if (ef < 0 || tr < 0 || Math.round(ef + tr) !== Math.round(monto)) {
+      alert('El pago mixto no cuadra: efectivo + transferencia debe ser igual al monto.');
+      return;
+    }
+    partes = [];
+    if (ef > 0) partes.push({ metodo: 'efectivo', monto: ef });
+    if (tr > 0) partes.push({ metodo: 'transferencia', monto: tr });
+  } else {
+    partes = [{ metodo: metodoPago, monto }];
+  }
+
   const btn = document.getElementById('btn-guardar-liq-pago');
   if (btn.disabled) return;
   btn.disabled = true; btn.textContent = 'Guardando...';
 
   const ahora = new Date();
-  const pago = { id: uid(), monto, metodoPago, fecha: fechaCO(ahora), hora: horaCO(ahora) };
-  let venta = null;
+  const pago = { id: uid(), monto, metodoPago, fecha: fechaCO(ahora), hora: horaCO(ahora), ventaIds: [] };
+  if (metodoPago === 'mixto') {
+    pago.efectivo = (partes.find(x => x.metodo === 'efectivo') || {}).monto || 0;
+    pago.transferencia = (partes.find(x => x.metodo === 'transferencia') || {}).monto || 0;
+  }
+  const ventasCreadas = [];
+  const deshacerVentas = async () => {
+    for (const v of ventasCreadas) await sheetsEscribir('delete', 'Ventas', null, v.id);
+    const ids = ventasCreadas.map(v => v.id);
+    DB.ventas = DB.ventas.filter(v => !ids.includes(v.id));
+  };
   try {
-    // El pago entra a la caja del día como una venta más (igual que un abono).
+    // El pago entra a la caja del día: una venta por cada método usado
+    // (así efectivo y transferencia quedan bien separados en los reportes).
     const gananciaNegocio = l.items.reduce((a, it) => {
       const p = DB.productos.find(x => x.id === it.productoId);
       return a + (liqNum(it.precioLista) - (p ? p.pcompra : 0)) * liqCalcItem(it).venta;
     }, 0);
-    const gananciaPago = t.total > 0 ? monto * (gananciaNegocio / t.total) : 0;
-    venta = {
-      id: uid(), fecha: pago.fecha, hora: pago.hora, total: monto, ganancia: gananciaPago,
-      nota: 'Liquidación vendedor: ' + l.nombre, metodoPago,
-      items: [{ ref: '-', nombre: 'Liquidación — ' + l.nombre, cantidad: 1, precio: monto, total: monto }],
-      clienteId: l.clienteId, clienteNombre: l.nombre, clienteCedula: '', clienteTelefono: '', clienteDireccion: '',
-      pagadoAhora: monto, saldoPendiente: Math.max(0, t.saldo - monto)
-    };
-    DB.ventas.push(venta);
-    const okV = await sheetsEscribir('append', 'Ventas', [venta.id, venta.fecha, venta.hora, venta.total, venta.ganancia, venta.nota, venta.metodoPago, JSON.stringify(venta.items), venta.clienteId, venta.clienteNombre, venta.clienteCedula, venta.clienteTelefono, venta.clienteDireccion, venta.pagadoAhora, venta.saldoPendiente]);
-    if (!okV) throw new Error('No se pudo guardar el pago en la hoja Ventas.');
+    const saldoDespues = Math.max(0, t.saldo - monto);
+    for (const parte of partes) {
+      const venta = {
+        id: uid(), fecha: pago.fecha, hora: pago.hora, total: parte.monto,
+        ganancia: t.total > 0 ? parte.monto * (gananciaNegocio / t.total) : 0,
+        nota: 'Liquidación vendedor: ' + l.nombre + (metodoPago === 'mixto' ? ' (pago mixto)' : ''),
+        metodoPago: parte.metodo,
+        items: [{ ref: '-', nombre: 'Liquidación — ' + l.nombre, cantidad: 1, precio: parte.monto, total: parte.monto }],
+        clienteId: l.clienteId, clienteNombre: l.nombre, clienteCedula: '', clienteTelefono: '', clienteDireccion: '',
+        pagadoAhora: parte.monto, saldoPendiente: saldoDespues
+      };
+      DB.ventas.push(venta);
+      ventasCreadas.push(venta);
+      const okV = await sheetsEscribir('append', 'Ventas', [venta.id, venta.fecha, venta.hora, venta.total, venta.ganancia, venta.nota, venta.metodoPago, JSON.stringify(venta.items), venta.clienteId, venta.clienteNombre, venta.clienteCedula, venta.clienteTelefono, venta.clienteDireccion, venta.pagadoAhora, venta.saldoPendiente]);
+      if (!okV) throw new Error('No se pudo guardar el pago en la hoja Ventas.');
+      pago.ventaIds.push(venta.id);
+    }
 
-    pago.ventaId = venta.id;
     l.pagos = l.pagos || [];
     l.pagos.push(pago);
     const okL = await sheetsEscribir('update', 'Liquidaciones', liqFila(l), l.id);
     if (!okL) {
       l.pagos.pop();
-      await sheetsEscribir('delete', 'Ventas', null, venta.id);
       throw new Error('Google Sheets no confirmó la actualización de la liquidación.');
     }
 
@@ -4036,7 +4079,7 @@ async function guardarPagoLiq() {
     renderLiqHistorial();
     mostrarToast(liqTotales(l).saldo <= 0 ? 'Liquidación pagada completamente ✓' : `Pago guardado ✓ · ${fmt(monto)}`);
   } catch (e) {
-    if (venta) DB.ventas = DB.ventas.filter(v => v.id !== venta.id);
+    try { await deshacerVentas(); } catch (e2) { console.error(e2); }
     guardarLocal();
     console.error('Error guardando pago de liquidación:', e);
     alert('NO SE PUDO GUARDAR EL PAGO.\n\n' + (e && e.message ? e.message : String(e)));
@@ -4058,9 +4101,11 @@ async function eliminarLiquidacion(id) {
   if (!ok) { alert('No se pudo eliminar la liquidación en Google Sheets.'); return; }
 
   for (const p of (l.pagos || [])) {
-    if (!p.ventaId) continue;
-    await sheetsEscribir('delete', 'Ventas', null, p.ventaId);
-    DB.ventas = DB.ventas.filter(v => v.id !== p.ventaId);
+    const ids = (p.ventaIds && p.ventaIds.length) ? p.ventaIds : (p.ventaId ? [p.ventaId] : []);
+    for (const vid of ids) {
+      await sheetsEscribir('delete', 'Ventas', null, vid);
+      DB.ventas = DB.ventas.filter(v => v.id !== vid);
+    }
   }
   for (const it of (l.items || [])) {
     const aplicado = Number(it.aplicado) || 0;
@@ -4137,7 +4182,7 @@ function imprimirLiquidacion(l) {
 
   const pagos = (l.pagos || []).map((p, i) => `
     <tr><td>${i + 1}</td><td>${esc(p.fecha || '')} ${esc(p.hora || '')}</td>
-    <td>${p.metodoPago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</td><td class="num">${fmt(p.monto)}</td></tr>`).join('');
+    <td>${liqTextoMetodo(p, false)}</td><td class="num">${fmt(p.monto)}</td></tr>`).join('');
 
   document.getElementById('liquidacion-print-contenido').innerHTML = `
     <div id="tp-header">
@@ -4245,7 +4290,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inventario
   document.getElementById('btn-abrir-modal-producto').addEventListener('click',()=>abrirModalProducto(null));
   document.getElementById('btn-guardar-producto').addEventListener('click', guardarProducto);
-  document.getElementById('prod-pcompra').addEventListener('input', actualizarPcompraIva);
   document.getElementById('inv-search').addEventListener('input', () => { inventarioMostrar = 10; renderInventario(); });
 
   // Lector de código de barras en Inventario: al escanear y llegar el Enter,
@@ -4492,6 +4536,30 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('liq-hist-buscar').addEventListener('input', renderLiqHistorial);
   document.getElementById('btn-guardar-liq-pago').addEventListener('click', guardarPagoLiq);
   document.getElementById('liq-pago-monto').addEventListener('keydown', e => { if (e.key==='Enter') guardarPagoLiq(); });
+  document.querySelectorAll('input[name="liq-pago-metodo"]').forEach(r => r.addEventListener('change', () => {
+    const mixto = document.querySelector('input[name="liq-pago-metodo"]:checked').value === 'mixto';
+    document.getElementById('liq-pago-mixto-box').classList.toggle('hidden', !mixto);
+    if (mixto) {
+      document.getElementById('liq-pago-mixto-efectivo').value = parseFloat(document.getElementById('liq-pago-monto').value) || 0;
+      document.getElementById('liq-pago-mixto-transferencia').value = 0;
+      liqActualizarMixto();
+    }
+  }));
+  document.getElementById('liq-pago-monto').addEventListener('input', () => {
+    if (document.querySelector('input[name="liq-pago-metodo"]:checked').value === 'mixto') {
+      document.getElementById('liq-pago-mixto-efectivo').value = parseFloat(document.getElementById('liq-pago-monto').value) || 0;
+      document.getElementById('liq-pago-mixto-transferencia').value = 0;
+      liqActualizarMixto();
+    }
+  });
+  // al escribir el efectivo, la transferencia se completa sola con lo que falta
+  document.getElementById('liq-pago-mixto-efectivo').addEventListener('input', () => {
+    const monto = parseFloat(document.getElementById('liq-pago-monto').value) || 0;
+    const ef = parseFloat(document.getElementById('liq-pago-mixto-efectivo').value) || 0;
+    document.getElementById('liq-pago-mixto-transferencia').value = Math.max(0, monto - ef);
+    liqActualizarMixto();
+  });
+  document.getElementById('liq-pago-mixto-transferencia').addEventListener('input', liqActualizarMixto);
 
   // Config
   document.getElementById('btn-agregar-usuario').addEventListener('click', agregarUsuario);
