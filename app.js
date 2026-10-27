@@ -519,6 +519,7 @@ async function mostrarPanelInterno(panel) {
     setTimeout(() => document.getElementById('inv-search').focus(), 100);
   }
   if (panel === 'clientes')   renderClientes();
+  if (panel === 'precios')    { mostrarClientePrecios(); renderPreciosEditor(); }
   if (panel === 'liquidacion') { liqMostrarVendedor(); renderLiqEditor(); renderLiqHistorial(); }
   if (panel === 'deudores')   renderDeudores();
   if (panel === 'anticipos')  renderAnticipos();
@@ -1073,8 +1074,6 @@ function abrirModalNuevoCliente(contexto) {
   document.getElementById('modal-cliente-titulo').textContent = 'Nuevo cliente';
   ['cliente-nombre','cliente-cedula','cliente-telefono','cliente-direccion','cliente-correo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('cliente-tipodoc').value = 'CC';
-  preciosClienteEdicion = [];
-  renderPreciosClienteEdicion();
   abrirModal('modal-cliente');
   setTimeout(() => document.getElementById('cliente-nombre').focus(), 100);
 }
@@ -1091,8 +1090,6 @@ function abrirModalEditarCliente(id) {
   document.getElementById('cliente-direccion').value = c.direccion || '';
   document.getElementById('cliente-correo').value = c.correo || '';
   document.getElementById('cliente-tipodoc').value = c.tipoDoc || 'CC';
-  preciosClienteEdicion = (c.precios||[]).map(x=>({...x}));
-  renderPreciosClienteEdicion();
   abrirModal('modal-cliente');
   setTimeout(() => document.getElementById('cliente-nombre').focus(), 100);
 }
@@ -1103,7 +1100,6 @@ function abrirModalEditarCliente(id) {
 // Cada cliente puede tener una lista de precios propios (producto -> precio).
 // Al elegir el cliente en Vender, esos productos salen directamente con su
 // precio, sin tener que escogerlo ni escribirlo en cada venta.
-let preciosClienteEdicion = [];
 
 function parsearPreciosCliente(v) {
   const arr = parsearJSON(v);
@@ -1120,59 +1116,123 @@ function precioEspecialCliente(p, cliente) {
   return x ? x.precio : null;
 }
 
-function renderPreciosClienteEdicion() {
-  const lista = document.getElementById('cliente-precios-lista');
-  if (!lista) return;
-  const buscar = document.getElementById('cliente-precio-buscar');
-  if (buscar) buscar.value = '';
-  const res = document.getElementById('cliente-precio-resultados');
-  if (res) res.innerHTML = '';
-  if (preciosClienteEdicion.length === 0) {
-    lista.innerHTML = '<p style="font-size:12px;color:var(--texto2);margin:4px 0">Sin precios especiales: se usan los precios normales.</p>';
-    return;
-  }
-  lista.innerHTML = preciosClienteEdicion.map((x, i) => `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <span style="flex:1;min-width:110px;font-size:13px">${esc(x.nombre)}</span>
-      <input type="number" min="0" value="${x.precio}" class="input-precio-cliente" data-i="${i}" title="Precio de lista (lo que paga)" placeholder="Lista" style="width:92px;margin:0">
-      <input type="number" min="0" value="${x.publico||''}" class="input-publico-cliente" data-i="${i}" title="Precio público (solo para liquidación de vendedores)" placeholder="Público" style="width:92px;margin:0">
-      <button type="button" class="btn-peligro btn-quitar-precio-cliente" data-i="${i}" style="padding:5px 9px"><i class="ti ti-x"></i></button>
-    </div>`).join('');
-  lista.querySelectorAll('.input-precio-cliente').forEach(inp => inp.addEventListener('input', () => {
-    preciosClienteEdicion[parseInt(inp.dataset.i)].precio = parseFloat(inp.value) || 0;
-  }));
-  lista.querySelectorAll('.input-publico-cliente').forEach(inp => inp.addEventListener('input', () => {
-    preciosClienteEdicion[parseInt(inp.dataset.i)].publico = parseFloat(inp.value) || 0;
-  }));
-  lista.querySelectorAll('.btn-quitar-precio-cliente').forEach(b => b.addEventListener('click', () => {
-    preciosClienteEdicion.splice(parseInt(b.dataset.i), 1);
-    renderPreciosClienteEdicion();
-  }));
+// =============================================
+// PRECIOS POR CLIENTE (sección aparte)
+// =============================================
+// Cada cliente puede tener su lista fija de productos con dos precios:
+// precio de lista (lo que paga) y precio público (lo que él vende, se usa en
+// la liquidación de vendedores). Al agregar un producto, los precios arrancan
+// con los del inventario y se pueden cambiar.
+let preCliente = null;
+let preLista = [];
+
+// Entre los dos precios del inventario, el menor es el de lista y el mayor el público.
+function preciosPorDefecto(p) {
+  const a = Number(p.pventa1) || 0, b = Number(p.pventa2) || 0;
+  if (a && b) return { precio: Math.min(a, b), publico: Math.max(a, b) };
+  return { precio: a || b, publico: a || b };
 }
 
-function buscarProductoPrecioCliente() {
-  const q = document.getElementById('cliente-precio-buscar').value.toLowerCase().trim();
-  const cont = document.getElementById('cliente-precio-resultados');
-  if (!q) { cont.innerHTML = ''; return; }
-  const encontrados = DB.productos.filter(p => productoCoincideTexto(p, q)).slice(0, 6);
-  if (encontrados.length === 0) { cont.innerHTML = '<p style="font-size:12px;color:var(--texto2);margin:4px 0">Sin resultados</p>'; return; }
-  cont.innerHTML = encontrados.map(p => `
-    <button type="button" class="btn-secundario btn-elegir-precio-cliente" data-id="${p.id}" style="display:flex;width:100%;justify-content:space-between;margin-bottom:4px;text-align:left">
-      <span>${esc(p.nombre)}</span><span style="color:var(--texto2)">${fmt(p.pventa1)}</span>
-    </button>`).join('');
-  cont.querySelectorAll('.btn-elegir-precio-cliente').forEach(b => b.addEventListener('click', () => {
-    const p = DB.productos.find(x => x.id === b.dataset.id);
-    if (!p) return;
-    if (!preciosClienteEdicion.find(x => x.productoId === p.id)) {
-      preciosClienteEdicion.push({ productoId: p.id, ref: p.ref, nombre: p.nombre, precio: p.pventa1, publico: p.pventa2 || 0 });
-    }
-    renderPreciosClienteEdicion();
-    setTimeout(() => {
-      const inputs = document.querySelectorAll('.input-precio-cliente');
-      const ult = inputs[inputs.length - 1];
-      if (ult) { ult.focus(); ult.select(); }
-    }, 50);
+function mostrarClientePrecios() {
+  const box = document.getElementById('pre-cliente-seleccionado');
+  const prod = document.getElementById('pre-producto-box');
+  if (!preCliente) { box.classList.add('hidden'); prod.classList.add('hidden'); return; }
+  document.getElementById('pre-cliente-nombre').textContent = preCliente.nombre;
+  document.getElementById('pre-cliente-detalle').textContent = `${preCliente.tipoDoc || 'CC'} ${preCliente.cedula}${preCliente.telefono ? ' · Tel: ' + preCliente.telefono : ''}`;
+  box.classList.remove('hidden');
+  prod.classList.remove('hidden');
+}
+
+function seleccionarClientePrecios(c) {
+  preCliente = c;
+  preLista = (c.precios || []).map(x => ({ ...x }));
+  mostrarClientePrecios();
+  renderPreciosEditor();
+  setTimeout(() => { const i = document.getElementById('pre-producto-buscar'); if (i) i.focus(); }, 100);
+}
+
+function quitarClientePrecios() {
+  preCliente = null; preLista = [];
+  mostrarClientePrecios();
+  renderPreciosEditor();
+}
+
+function agregarProductoPrecios(p) {
+  if (!preCliente) { alert('Primero elige el cliente.'); return; }
+  let i = preLista.findIndex(x => x.productoId === p.id);
+  if (i < 0) {
+    preLista.push({ productoId: p.id, ref: p.ref, nombre: p.nombre, ...preciosPorDefecto(p) });
+    i = preLista.length - 1;
+  }
+  renderPreciosEditor();
+  setTimeout(() => {
+    const inp = document.querySelector(`#pre-editor tr[data-i="${i}"] .pre-in`);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+function renderPreciosEditor() {
+  const cont = document.getElementById('pre-editor');
+  if (!cont) return;
+  if (!preCliente) {
+    cont.innerHTML = `<div class="estado-vacio"><i class="ti ti-tags"></i><p>Busca un cliente para ver y editar sus precios.</p></div>`;
+    return;
+  }
+  if (preLista.length === 0) {
+    cont.innerHTML = `<p style="font-size:13px;color:var(--texto2);margin:10px 0">Este cliente todavía no tiene precios. Busca un producto arriba para agregarlo.</p>`;
+  } else {
+    const filas = preLista.map((x, i) => `
+      <tr data-i="${i}">
+        <td>${esc(x.nombre)}<div style="font-size:11px;color:var(--texto2)">${esc(x.ref || '')}</div></td>
+        <td><input type="number" min="0" class="pre-in" data-i="${i}" data-f="precio" value="${x.precio || ''}" placeholder="0" style="width:110px"></td>
+        <td><input type="number" min="0" class="pre-in" data-i="${i}" data-f="publico" value="${x.publico || ''}" placeholder="0" style="width:110px"></td>
+        <td><button type="button" class="btn-peligro btn-quitar-pre" data-i="${i}" style="padding:5px 9px"><i class="ti ti-trash"></i></button></td>
+      </tr>`).join('');
+    cont.innerHTML = `
+      <div class="tabla-wrap"><table class="pre-tabla">
+        <thead><tr><th>Producto</th><th>Precio de lista (lo que paga)</th><th>Precio público (lo que vende)</th><th></th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table></div>`;
+  }
+  cont.innerHTML += `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem">
+      <button class="btn-primary" id="btn-pre-guardar"><i class="ti ti-device-floppy"></i> Guardar precios</button>
+    </div>`;
+
+  const entradas = Array.from(cont.querySelectorAll('.pre-in'));
+  entradas.forEach((el, idx) => {
+    el.addEventListener('input', () => { preLista[parseInt(el.dataset.i)][el.dataset.f] = parseFloat(el.value) || 0; });
+    el.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const sig = entradas[idx + 1];
+      if (sig) { sig.focus(); sig.select(); }
+      else document.getElementById('pre-producto-buscar').focus();
+    });
+  });
+  cont.querySelectorAll('.btn-quitar-pre').forEach(b => b.addEventListener('click', () => {
+    preLista.splice(parseInt(b.dataset.i), 1);
+    renderPreciosEditor();
   }));
+  document.getElementById('btn-pre-guardar').addEventListener('click', guardarPreciosCliente);
+}
+
+async function guardarPreciosCliente() {
+  if (!preCliente) return;
+  const c = DB.clientes.find(x => x.id === preCliente.id);
+  if (!c) { alert('Este cliente ya no existe.'); return; }
+  const sinPrecio = preLista.filter(x => !(Number(x.precio) > 0));
+  if (sinPrecio.length && !confirm(`${sinPrecio.length} producto(s) no tienen precio de lista (${sinPrecio.map(x => x.nombre).join(', ')}). ¿Guardar así?`)) return;
+  c.precios = preLista.map(x => ({
+    productoId: x.productoId, ref: x.ref || '', nombre: x.nombre || '',
+    precio: Number(x.precio) || 0, publico: Number(x.publico) || 0
+  }));
+  const ok = await sheetsEscribir('update', 'Clientes', [c.id, c.nombre, c.cedula, c.telefono, c.direccion, c.correo, c.tipoDoc, JSON.stringify(c.precios)], c.id);
+  guardarLocal();
+  if (!ok) { alert('NO SE PUDIERON GUARDAR LOS PRECIOS en Google Sheets. Revisa la conexión e inténtalo de nuevo.'); return; }
+  preCliente = c;
+  if (clienteVenta && clienteVenta.id === c.id) seleccionarClienteVenta(c);
+  mostrarToast('Precios guardados ✓');
 }
 
 // Re-calcula el carrito cuando se elige o se quita el cliente.
@@ -1226,7 +1286,7 @@ async function guardarCliente() {
   if (editandoClienteId) {
     const c = DB.clientes.find(x => x.id === editandoClienteId);
     if (c) {
-      Object.assign(c, { nombre, cedula, telefono, direccion, correo, tipoDoc, precios: preciosClienteEdicion.map(x=>({...x})) });
+      Object.assign(c, { nombre, cedula, telefono, direccion, correo, tipoDoc, precios: c.precios || [] });
       await sheetsEscribir('update','Clientes',[c.id,c.nombre,c.cedula,c.telefono,c.direccion,c.correo,c.tipoDoc,JSON.stringify(c.precios)],c.id);
       if (clienteVenta && clienteVenta.id === c.id) seleccionarClienteVenta(c);
     }
@@ -1238,7 +1298,7 @@ async function guardarCliente() {
     return;
   }
 
-  const nuevo = { id: uid(), nombre, cedula, telefono, direccion, correo, tipoDoc, precios: preciosClienteEdicion.map(x=>({...x})) };
+  const nuevo = { id: uid(), nombre, cedula, telefono, direccion, correo, tipoDoc, precios: [] };
   DB.clientes.push(nuevo);
   await sheetsEscribir('append','Clientes',[nuevo.id,nuevo.nombre,nuevo.cedula,nuevo.telefono,nuevo.direccion,nuevo.correo,nuevo.tipoDoc,JSON.stringify(nuevo.precios)]);
   guardarLocal();
@@ -1281,6 +1341,7 @@ function renderClientes() {
       <td style="font-size:13px">${esc(c.correo)||'-'}</td>
       <td style="font-size:13px">${(c.precios&&c.precios.length)?`<span class="badge rosa">${c.precios.length} precio${c.precios.length>1?'s':''}</span>`:'-'}</td>
       <td><div style="display:flex;gap:6px">
+        <button class="btn-secundario btn-precios-cliente" data-id="${c.id}" style="padding:6px 10px" title="Precios de este cliente"><i class="ti ti-tags"></i></button>
         <button class="btn-secundario btn-editar-cliente" data-id="${c.id}" style="padding:6px 10px"><i class="ti ti-edit"></i></button>
         <button class="btn-peligro btn-eliminar-cliente" data-id="${c.id}" style="padding:6px 10px"><i class="ti ti-trash"></i></button>
       </div></td>
@@ -1290,6 +1351,12 @@ function renderClientes() {
     <thead><tr><th>Nombre</th><th>Documento</th><th>Teléfono</th><th>Dirección</th><th>Correo</th><th>Precios esp.</th><th>Acciones</th></tr></thead>
     <tbody>${filas}</tbody></table></div>`;
 
+  cont.querySelectorAll('.btn-precios-cliente').forEach(b => b.addEventListener('click', () => {
+    const c = DB.clientes.find(x => x.id === b.dataset.id);
+    if (!c) return;
+    mostrarPanel('precios');
+    seleccionarClientePrecios(c);
+  }));
   cont.querySelectorAll('.btn-editar-cliente').forEach(b => b.addEventListener('click', () => abrirModalEditarCliente(b.dataset.id)));
   cont.querySelectorAll('.btn-eliminar-cliente').forEach(b => b.addEventListener('click', () => eliminarCliente(b.dataset.id)));
 }
@@ -3601,11 +3668,15 @@ function liqTotales(l) {
 function liqClonar(l) { return JSON.parse(JSON.stringify(l)); }
 
 function liqItemsDesdeVendedor(c) {
-  return (c.precios || []).map(x => ({
-    productoId: x.productoId, ref: x.ref || '', nombre: x.nombre || '',
-    cargue: 0, recargue: 0, devolucion: 0,
-    precioLista: Number(x.precio) || 0, precioPublico: Number(x.publico) || 0, aplicado: 0
-  }));
+  return (c.precios || []).map(x => {
+    const p = DB.productos.find(y => y.id === x.productoId);
+    const d = p ? preciosPorDefecto(p) : { precio: 0, publico: 0 };
+    return {
+      productoId: x.productoId, ref: x.ref || '', nombre: x.nombre || '',
+      cargue: 0, recargue: 0, devolucion: 0,
+      precioLista: Number(x.precio) || d.precio, precioPublico: Number(x.publico) || d.publico, aplicado: 0
+    };
+  });
 }
 
 function liqBorradorNuevo(c) {
@@ -3691,8 +3762,8 @@ function agregarProductoLiq(p) {
     const esp = c && (c.precios || []).find(x => x.productoId === p.id);
     liqActual.items.push({
       productoId: p.id, ref: p.ref, nombre: p.nombre, cargue: 0, recargue: 0, devolucion: 0,
-      precioLista: esp ? Number(esp.precio) : p.pventa1,
-      precioPublico: (esp && esp.publico) ? Number(esp.publico) : (p.pventa2 || p.pventa1),
+      precioLista: (esp && Number(esp.precio)) ? Number(esp.precio) : preciosPorDefecto(p).precio,
+      precioPublico: (esp && Number(esp.publico)) ? Number(esp.publico) : preciosPorDefecto(p).publico,
       aplicado: 0
     });
     i = liqActual.items.length - 1;
@@ -4367,7 +4438,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-guardar-cliente').addEventListener('click', guardarCliente);
   document.getElementById('btn-abrir-modal-cliente').addEventListener('click', () => abrirModalNuevoCliente('clientes'));
   document.getElementById('clientes-search').addEventListener('input', renderClientes);
-  document.getElementById('cliente-precio-buscar').addEventListener('input', buscarProductoPrecioCliente);
+  habilitarEnterAvanza(['cliente-nombre','cliente-tipodoc','cliente-cedula','cliente-telefono','cliente-direccion','cliente-correo'], guardarCliente);
 
   // Deudores
   inicializarBuscadorCliente('deudor', 'deudor-cliente-buscar', 'deudor-cliente-resultados', seleccionarClienteDeudor);
@@ -4407,6 +4478,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reportes
   document.querySelectorAll('.btn-reporte').forEach(b=>
     b.addEventListener('click',()=> renderReportes(b.dataset.periodo)));
+
+  // Precios por cliente
+  inicializarBuscadorCliente('pre', 'pre-cliente-buscar', 'pre-cliente-resultados', seleccionarClientePrecios);
+  document.getElementById('btn-quitar-cliente-pre').addEventListener('click', quitarClientePrecios);
+  inicializarBuscadorProducto('pre', 'pre-producto-buscar', 'pre-producto-resultados', agregarProductoPrecios);
 
   // Liquidación de vendedores
   inicializarBuscadorCliente('liq', 'liq-cliente-buscar', 'liq-cliente-resultados', seleccionarVendedorLiq);

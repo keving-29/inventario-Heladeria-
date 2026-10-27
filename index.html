@@ -40,6 +40,7 @@
           <button class="nav-tab" data-tab="inventario"><i class="ti ti-package"></i> Inventario</button>
           <button class="nav-tab" data-tab="ventas"><i class="ti ti-shopping-bag"></i> Vender</button>
           <button class="nav-tab" data-tab="clientes"><i class="ti ti-address-book"></i> Clientes</button>
+          <button class="nav-tab" data-tab="precios"><i class="ti ti-tags"></i> Precios</button>
           <button class="nav-tab" data-tab="liquidacion"><i class="ti ti-truck-delivery"></i> Liquidación</button>
           <button class="nav-tab" data-tab="cotizacion"><i class="ti ti-file-invoice"></i> Cotización</button>
           <button class="nav-tab" data-tab="traslado"><i class="ti ti-truck"></i> Traslado</button>
@@ -168,6 +169,36 @@
           </div>
           <input type="text" id="clientes-search" placeholder="Buscar por nombre o cédula/NIT...">
           <div id="clientes-contenido"></div>
+        </div>
+      </section>
+
+      <!-- PRECIOS POR CLIENTE -->
+      <section id="panel-precios" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Precios por cliente</h2>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">Busca el cliente y arma su lista de productos con sus precios. Al elegir ese cliente en Vender o en Liquidación, salen sus precios solos. Los precios arrancan con los del inventario y los puedes cambiar.</p>
+
+          <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Cliente</p>
+          <div id="pre-cliente-busqueda-box">
+            <input type="text" id="pre-cliente-buscar" placeholder="Buscar cliente por nombre o cédula...">
+            <div id="pre-cliente-resultados"></div>
+          </div>
+          <div id="pre-cliente-seleccionado" class="producto-seleccionado-box hidden">
+            <div class="producto-seleccionado-info">
+              <strong id="pre-cliente-nombre"></strong>
+              <span id="pre-cliente-detalle"></span>
+            </div>
+            <button type="button" class="btn-peligro" id="btn-quitar-cliente-pre" style="padding:6px 10px"><i class="ti ti-x"></i></button>
+          </div>
+
+          <div id="pre-producto-box" class="hidden">
+            <input type="text" id="pre-producto-buscar" placeholder="Buscar producto para agregarle precio (nombre o código)...">
+            <div id="pre-producto-resultados"></div>
+          </div>
+
+          <div id="pre-editor"></div>
         </div>
       </section>
 
@@ -522,13 +553,6 @@
       <input type="text" id="cliente-telefono" placeholder="Teléfono">
       <input type="text" id="cliente-direccion" placeholder="Dirección">
       <input type="email" id="cliente-correo" placeholder="Correo">
-      <div style="margin-top:6px;padding-top:10px;border-top:0.5px solid var(--borde)">
-        <label style="font-size:12px;color:var(--texto2);display:block;margin-bottom:4px"><strong>Precios especiales de este cliente</strong> (opcional)</label>
-        <p style="font-size:11px;color:var(--texto2);margin-bottom:6px">Primer campo: precio de lista (lo que paga). Segundo: precio público (solo para liquidación de vendedores).</p>
-        <div id="cliente-precios-lista"></div>
-        <input type="text" id="cliente-precio-buscar" placeholder="Buscar producto para agregarle precio...">
-        <div id="cliente-precio-resultados"></div>
-      </div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn-cerrar-modal" data-modal="modal-cliente" style="flex:1">Cancelar</button>
         <button class="btn-primary" id="btn-guardar-cliente" style="flex:1">Guardar</button>
