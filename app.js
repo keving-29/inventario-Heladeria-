@@ -168,7 +168,9 @@ async function sincronizar(ventasDias) {
       pagadoAhora: (f[13]!==undefined&&f[13]!=='') ? Number(f[13]) : undefined,
       saldoPendiente: (f[14]!==undefined&&f[14]!=='') ? Number(f[14]) : undefined,
       pagoRecibido: (f[15]!==undefined&&f[15]!=='') ? Number(f[15]) : undefined,
-      cambio: (f[16]!==undefined&&f[16]!=='') ? Number(f[16]) : undefined
+      cambio: (f[16]!==undefined&&f[16]!=='') ? Number(f[16]) : undefined,
+      pagoEf: (f[17]!==undefined&&f[17]!=='') ? Number(f[17]) : undefined,
+      pagoTr: (f[18]!==undefined&&f[18]!=='') ? Number(f[18]) : undefined
     }));
   }
 
@@ -224,7 +226,9 @@ async function sincronizar(ventasDias) {
     DB.gastos = datos.Gastos.slice(1).map(f => ({
       id: String(f[0]), categoria: String(f[1]||''), monto: Number(f[2])||0,
       metodoPago: String(f[3]||'efectivo'), fecha: isoAFechaCO(f[4]), hora: String(f[5]||''),
-      nota: String(f[6]||'')
+      nota: String(f[6]||''),
+      efectivo: (f[7]!==undefined&&f[7]!=='') ? Number(f[7]) : undefined,
+      transferencia: (f[8]!==undefined&&f[8]!=='') ? Number(f[8]) : undefined
     }));
   }
 
@@ -256,7 +260,7 @@ async function inicializarSheets() {
   if (!datos.Productos || datos.Productos.length === 0)
     await sheetsEscribir('append', 'Productos', ['ID','Ref','Nombre','PCompra','PVenta1','PVenta2','Stock']);
   if (!datos.Ventas || datos.Ventas.length === 0)
-    await sheetsEscribir('append', 'Ventas', ['ID','Fecha','Hora','Total','Ganancia','Nota','MetodoPago','Items','ClienteId','ClienteNombre','ClienteCedula','ClienteTelefono','ClienteDireccion','PagadoAhora','SaldoPendiente','PagoRecibido','Cambio']);
+    await sheetsEscribir('append', 'Ventas', ['ID','Fecha','Hora','Total','Ganancia','Nota','MetodoPago','Items','ClienteId','ClienteNombre','ClienteCedula','ClienteTelefono','ClienteDireccion','PagadoAhora','SaldoPendiente','PagoRecibido','Cambio','PagoEfectivo','PagoTransferencia']);
   if (!datos.Usuarios || datos.Usuarios.length === 0) {
     await sheetsEscribir('append', 'Usuarios', ['Usuario','Contraseña','Rol']);
     await sheetsEscribir('append', 'Usuarios', ['admin','CremHelado2812','admin']);
@@ -272,7 +276,7 @@ async function inicializarSheets() {
   if (!datos.Proveedores || datos.Proveedores.length === 0)
     await sheetsEscribir('append', 'Proveedores', ['ID','Empresa','FechaLlegadaPedido','Monto','NumeroCuotas','FechaLimite','Fecha','Hora','Abonos','Pagada']);
   if (!datos.Gastos || datos.Gastos.length === 0)
-    await sheetsEscribir('append', 'Gastos', ['ID','Categoria','Monto','MetodoPago','Fecha','Hora','Nota']);
+    await sheetsEscribir('append', 'Gastos', ['ID','Categoria','Monto','MetodoPago','Fecha','Hora','Nota','Efectivo','Transferencia']);
   if (!datos.Traslados || datos.Traslados.length === 0)
     await sheetsEscribir('append', 'Traslados', ['ID','Numero','Fecha','Hora','Items']);
   if (!datos.Liquidaciones || datos.Liquidaciones.length === 0)
@@ -2254,6 +2258,9 @@ function abrirModalGasto() {
   document.getElementById('gasto-monto').value = '';
   document.getElementById('gasto-nota').value = '';
   document.querySelector('input[name="gasto-metodo"][value="efectivo"]').checked = true;
+  document.getElementById('gasto-mixto-efectivo').value = 0;
+  document.getElementById('gasto-mixto-transferencia').value = 0;
+  document.getElementById('gasto-mixto-box').classList.add('hidden');
   abrirModal('modal-gasto');
 }
 
@@ -2264,16 +2271,75 @@ async function guardarGasto() {
   if (!gastoCategoriaSeleccionada) { alert('Selecciona una categoría de gasto'); return; }
   if (!monto || monto<=0) { alert('Ingresa un monto válido'); return; }
 
+  let efectivo, transferencia;
+  if (metodoPago === 'mixto') {
+    efectivo = parseFloat(document.getElementById('gasto-mixto-efectivo').value)||0;
+    transferencia = parseFloat(document.getElementById('gasto-mixto-transferencia').value)||0;
+    if (efectivo < 0 || transferencia < 0 || Math.round(efectivo+transferencia) !== Math.round(monto)) {
+      alert('El pago combinado no cuadra: efectivo + transferencia debe ser igual al monto del gasto.');
+      return;
+    }
+  }
+
   const ahora = new Date();
-  const gasto = { id: uid(), categoria: gastoCategoriaSeleccionada, monto, metodoPago, fecha: fechaCO(ahora), hora: horaCO(ahora), nota };
+  const gasto = { id: uid(), categoria: gastoCategoriaSeleccionada, monto, metodoPago, fecha: fechaCO(ahora), hora: horaCO(ahora), nota, efectivo, transferencia };
   DB.gastos.push(gasto);
-  await sheetsEscribir('append','Gastos',[gasto.id,gasto.categoria,gasto.monto,gasto.metodoPago,gasto.fecha,gasto.hora,gasto.nota]);
+  await sheetsEscribir('append','Gastos',[gasto.id,gasto.categoria,gasto.monto,gasto.metodoPago,gasto.fecha,gasto.hora,gasto.nota,efectivo!=null?efectivo:'',transferencia!=null?transferencia:'']);
 
   guardarLocal();
   cerrarModal('modal-gasto');
   renderGastos();
   renderDashboard();
   mostrarToast('Gasto registrado ✓');
+}
+
+// ---- Reparto efectivo / transferencia (incluye pago combinado) ----
+function partesVenta(v) {
+  const total = v.total || 0, gan = v.ganancia || 0;
+  let tr = 0;
+  if (v.metodoPago === 'transferencia') tr = total;
+  else if (v.metodoPago === 'mixto' && v.pagoTr != null) tr = Math.min(total, Math.max(0, v.pagoTr));
+  const f = total ? tr / total : 0;
+  return { ef: total - tr, tr, gEf: gan - gan * f, gTr: gan * f };
+}
+function partesGasto(g) {
+  const monto = g.monto || 0;
+  let tr = 0;
+  if (g.metodoPago === 'transferencia') tr = monto;
+  else if (g.metodoPago === 'mixto' && g.transferencia != null) tr = Math.min(monto, Math.max(0, g.transferencia));
+  return { ef: monto - tr, tr };
+}
+function resumenMetodos(ventas, gastos) {
+  const r = { vendido:0, ganancia:0, vEf:0, vTr:0, gaEf:0, gaTr:0, gasto:0, gsEf:0, gsTr:0 };
+  ventas.forEach(v => { const p = partesVenta(v); r.vendido += v.total; r.ganancia += v.ganancia; r.vEf += p.ef; r.vTr += p.tr; r.gaEf += p.gEf; r.gaTr += p.gTr; });
+  gastos.forEach(g => { const p = partesGasto(g); r.gasto += g.monto; r.gsEf += p.ef; r.gsTr += p.tr; });
+  r.netoEf = r.gaEf - r.gsEf; r.netoTr = r.gaTr - r.gsTr; r.neto = r.ganancia - r.gasto;
+  return r;
+}
+function badgeMetodo(x) {
+  if (x.metodoPago === 'mixto') {
+    const detalle = (x.metodoPago === 'mixto' && (x.efectivo != null || x.pagoEf != null))
+      ? `title="Efectivo ${fmt(x.efectivo != null ? x.efectivo : x.pagoEf)} · Transferencia ${fmt(x.transferencia != null ? x.transferencia : x.pagoTr)}"` : '';
+    return `<span class="badge ok" ${detalle}>🔀 Combinado</span>`;
+  }
+  return `<span class="badge ${x.metodoPago==='transferencia'?'rosa':'verde'}">${x.metodoPago==='transferencia'?'🏦 Transferencia':'💵 Efectivo'}</span>`;
+}
+
+function gastoActualizarMixto() {
+  const mixto = document.querySelector('input[name="gasto-metodo"]:checked').value === 'mixto';
+  document.getElementById('gasto-mixto-box').classList.toggle('hidden', !mixto);
+  if (mixto) gastoMixtoDesde('monto');
+}
+function gastoMixtoDesde(origen) {
+  const monto = parseFloat(document.getElementById('gasto-monto').value)||0;
+  const ef = document.getElementById('gasto-mixto-efectivo');
+  const tr = document.getElementById('gasto-mixto-transferencia');
+  if (origen === 'tr') ef.value = Math.max(0, monto - (parseFloat(tr.value)||0));
+  else tr.value = Math.max(0, monto - (parseFloat(ef.value)||0));
+  const resto = monto - (parseFloat(ef.value)||0) - (parseFloat(tr.value)||0);
+  const info = document.getElementById('gasto-mixto-info');
+  info.textContent = Math.round(resto) === 0 ? 'Cuadra con el monto ✓' : `Falta repartir ${fmt(resto)}`;
+  info.style.color = Math.round(resto) === 0 ? 'var(--malva)' : '#A32D2D';
 }
 
 async function eliminarGasto(id) {
@@ -2290,8 +2356,8 @@ function renderGastos() {
     return d.getMonth()===ahora.getMonth() && d.getFullYear()===ahora.getFullYear();
   });
   const totalMes = gastosMes.reduce((a,g)=>a+g.monto,0);
-  const efectivoMes = gastosMes.filter(g=>g.metodoPago!=='transferencia').reduce((a,g)=>a+g.monto,0);
-  const transferenciaMes = gastosMes.filter(g=>g.metodoPago==='transferencia').reduce((a,g)=>a+g.monto,0);
+  const efectivoMes = gastosMes.reduce((a,g)=>a+partesGasto(g).ef,0);
+  const transferenciaMes = gastosMes.reduce((a,g)=>a+partesGasto(g).tr,0);
 
   document.getElementById('gastos-resumen').innerHTML = `
     <div id="dash-metrics">
@@ -2311,7 +2377,7 @@ function renderGastos() {
       <td>${g.fecha}</td>
       <td><span class="badge rosa">${esc(g.categoria)}</span></td>
       <td>${fmt(g.monto)}</td>
-      <td><span class="badge ${g.metodoPago==='transferencia'?'rosa':'verde'}">${g.metodoPago==='transferencia'?'🏦 Transferencia':'💵 Efectivo'}</span></td>
+      <td>${badgeMetodo(g)}</td>
       <td style="font-size:13px;color:var(--texto2)">${esc(g.nota)||'-'}</td>
       <td><button class="btn-peligro btn-eliminar-gasto" data-id="${g.id}" style="padding:5px 9px"><i class="ti ti-trash"></i></button></td>
     </tr>`).join('');
@@ -2684,43 +2750,75 @@ function abrirFactura(venta) {
 // nombre, para poder usarlo como respaldo cuando la impresión térmica POS
 // (más abajo) no esté disponible.
 function imprimirBoucherHTML(venta) {
-  const metodoTexto = venta.metodoPago === 'transferencia' ? 'Transferencia' : 'Efectivo';
+  const metodoTexto = venta.metodoPago === 'transferencia' ? 'Transferencia'
+    : venta.metodoPago === 'mixto' ? 'Combinado (efectivo + transferencia)' : 'Efectivo';
 
+  // Formato de la remisión de papel de Distri Helados Arauquita
+  const MIN_FILAS = 14;
   const filas = venta.items.map(i => `
     <tr>
-      <td>${esc(i.ref||'-')}</td>
+      <td class="c">${i.cantidad}</td>
       <td>${esc(i.nombre)}</td>
-      <td style="text-align:center">${i.cantidad}</td>
-      <td style="text-align:right">${fmt(i.precio)}</td>
+      <td class="r">${fmt(i.precio)}</td>
+      <td class="r tot">${fmt(i.total != null ? i.total : i.precio * i.cantidad)}</td>
     </tr>`).join('');
+  const vacias = Math.max(0, MIN_FILAS - venta.items.length);
+  const filasVacias = Array.from({ length: vacias }, () => `<tr><td class="c">&nbsp;</td><td></td><td></td><td class="tot"></td></tr>`).join('');
+
+  const partes = String(venta.fecha || '').split('/');
+  let numero = DB.ventas.findIndex(v => v.id === venta.id) + 1;
+  if (numero <= 0) numero = DB.ventas.length + 1;
+  const numeroTxt = String(numero).padStart(4, '0');
 
   document.getElementById('venta-print-contenido').innerHTML = `
-    <div id="tp-header">
-      <h1>Crem Helado</h1>
-      <p>Comprobante de venta</p>
+  <div class="rem">
+    <div class="rem-cab">
+      <img src="logo-distri.png" alt="Distri Helados" class="rem-logo">
+      <div class="rem-titulo">
+        <div class="t1">COMERCIALIZADORA</div>
+        <div class="t2">DISTRI HELADOS</div>
+        <div class="t3">ARAUQUITA</div>
+        <div class="t4">PUNTO DE VENTA AUTORIZADO</div>
+      </div>
+      <img src="logo-crem.png" alt="Crem Helado" class="rem-logo">
     </div>
-    <div id="tp-meta">
-      <span><strong>Fecha:</strong> ${venta.fecha}</span>
-      <span><strong>Hora:</strong> ${venta.hora}</span>
+    <div class="rem-dir">Cra. 5 N° 4 - 20 / Barrio Charala / Cel. 313 8841346 / Arauquita - Arauca</div>
+
+    <div class="rem-fila1">
+      <table class="rem-fecha"><tr><th colspan="3">FECHA</th></tr>
+        <tr><th>DÍA</th><th>MES</th><th>AÑO</th></tr>
+        <tr><td>${partes[0]||''}</td><td>${partes[1]||''}</td><td>${partes[2]||''}</td></tr></table>
+      <div class="rem-nombre">REMISIÓN</div>
+      <div class="rem-numero">${numeroTxt}</div>
     </div>
-    ${venta.clienteNombre?`
-    <p style="font-size:13px;margin-bottom:4px"><strong>Cliente:</strong> ${esc(venta.clienteNombre)}</p>
-    <p style="font-size:13px;margin-bottom:4px"><strong>Cédula:</strong> ${esc(venta.clienteCedula||'-')}</p>
-    ${venta.clienteTelefono?`<p style="font-size:13px;margin-bottom:4px"><strong>Teléfono:</strong> ${esc(venta.clienteTelefono)}</p>`:''}
-    ${venta.clienteDireccion?`<p style="font-size:13px;margin-bottom:10px"><strong>Dirección:</strong> ${esc(venta.clienteDireccion)}</p>`:''}
-    `:''}
-    ${venta.nota?`<p style="font-size:13px;margin-bottom:10px"><strong>Nota:</strong> ${esc(venta.nota)}</p>`:''}
-    <table>
-      <thead><tr><th>Código</th><th>Producto</th><th>Cant.</th><th>Precio</th></tr></thead>
-      <tbody>${filas}</tbody>
+
+    <div class="rem-cliente">
+      <div class="rc-a">
+        <div><span>Señor(es):</span> ${esc(venta.clienteNombre||'')}</div>
+        <div><span>Dirección:</span> ${esc(venta.clienteDireccion||'')}</div>
+      </div>
+      <div class="rc-b">
+        <div><span>NIT:</span> ${esc(venta.clienteCedula||'')}</div>
+        <div><span>TEL:</span> ${esc(venta.clienteTelefono||'')}</div>
+      </div>
+    </div>
+
+    <table class="rem-items">
+      <thead><tr><th class="c">CANT.</th><th>DESCRIPCIÓN</th><th>VR. UNIT.</th><th>VR. TOTAL</th></tr></thead>
+      <tbody>${filas}${filasVacias}</tbody>
+      <tfoot>
+        ${venta.saldoPendiente!==undefined?`<tr><td colspan="3" class="r">PAGADO AHORA</td><td class="r tot">${fmt(venta.total)}</td></tr>
+        <tr><td colspan="3" class="r">FALTA POR CANCELAR</td><td class="r tot">${fmt(venta.saldoPendiente)}</td></tr>`
+        :`<tr><td colspan="3" class="r total-l">TOTAL $</td><td class="r tot total-v">${fmt(venta.total)}</td></tr>`}
+      </tfoot>
     </table>
-    <p style="margin-top:12px;font-size:14px;text-align:right"><strong>${venta.saldoPendiente!==undefined?'Pagado ahora':'Total'}: ${fmt(venta.total)}</strong></p>
-    ${venta.saldoPendiente!==undefined?`<p style="margin-top:4px;font-size:14px;text-align:right;color:#A32D2D"><strong>Falta por cancelar: ${fmt(venta.saldoPendiente)}</strong></p>`:''}
-    ${venta.pagoRecibido!==undefined?`
-    <p style="margin-top:4px;font-size:13px;text-align:right">Pago recibido: ${fmt(venta.pagoRecibido)}</p>
-    <p style="margin-top:2px;font-size:14px;text-align:right"><strong>Cambio: ${fmt(venta.cambio||0)}</strong></p>`:''}
-    <p style="margin-top:4px;font-size:12px;text-align:right">Método de pago: ${metodoTexto}</p>
-    <p style="text-align:center;margin-top:20px;font-size:12px">¡Gracias por tu compra!</p>
+    <div class="rem-pie-info">Pago: ${metodoTexto}${venta.nota?' · Nota: '+esc(venta.nota):''}${venta.pagoRecibido!==undefined?' · Recibido: '+fmt(venta.pagoRecibido)+' · Cambio: '+fmt(venta.cambio||0):''}</div>
+
+    <div class="rem-firmas">
+      <div class="rf-v">Firma del Vendedor</div>
+      <div class="rf-c">Firma Cliente:<div class="rf-cc">C.C./ NIT:</div></div>
+    </div>
+  </div>
   `;
 
   prepararImpresion('venta-print');
@@ -3355,10 +3453,12 @@ async function finalizarVenta(pagoEfectivoRecibido) {
     clienteId: clienteVenta?clienteVenta.id:'', clienteNombre: clienteVenta?clienteVenta.nombre:'',
     clienteCedula: clienteVenta?clienteVenta.cedula:'', clienteTelefono: clienteVenta?clienteVenta.telefono:'',
     clienteDireccion: clienteVenta?clienteVenta.direccion:'',
-    pagoRecibido: pagoEfectivoRecibido!=null?pagoEfectivoRecibido:undefined, cambio
+    pagoRecibido: pagoEfectivoRecibido!=null?pagoEfectivoRecibido:undefined, cambio,
+    pagoEf: metodoPago==='mixto' ? (parseFloat(document.getElementById('pago-mixto-efectivo').value)||0) : undefined,
+    pagoTr: metodoPago==='mixto' ? (parseFloat(document.getElementById('pago-mixto-transferencia').value)||0) : undefined
   };
   DB.ventas.push(venta);
-  await sheetsEscribir('append','Ventas',[venta.id,venta.fecha,venta.hora,venta.total,venta.ganancia,venta.nota,venta.metodoPago,JSON.stringify(venta.items),venta.clienteId,venta.clienteNombre,venta.clienteCedula,venta.clienteTelefono,venta.clienteDireccion,'','',venta.pagoRecibido!=null?venta.pagoRecibido:'',venta.cambio!=null?venta.cambio:'']);
+  await sheetsEscribir('append','Ventas',[venta.id,venta.fecha,venta.hora,venta.total,venta.ganancia,venta.nota,venta.metodoPago,JSON.stringify(venta.items),venta.clienteId,venta.clienteNombre,venta.clienteCedula,venta.clienteTelefono,venta.clienteDireccion,'','',venta.pagoRecibido!=null?venta.pagoRecibido:'',venta.cambio!=null?venta.cambio:'',venta.pagoEf!=null?venta.pagoEf:'',venta.pagoTr!=null?venta.pagoTr:'']);
 
   guardarLocal();
   mostrarToast(`Venta registrada · ${metodoPago==='transferencia'?'🏦':metodoPago==='mixto'?'🔀':'💵'} ${fmt(total)}`);
@@ -3398,8 +3498,8 @@ function renderHistorial() {
   }
 
   const totalDia=ventas.reduce((a,v)=>a+v.total,0);
-  const efectivo=ventas.filter(v=>v.metodoPago!=='transferencia').reduce((a,v)=>a+v.total,0);
-  const transferencia=ventas.filter(v=>v.metodoPago==='transferencia').reduce((a,v)=>a+v.total,0);
+  const efectivo=ventas.reduce((a,v)=>a+partesVenta(v).ef,0);
+  const transferencia=ventas.reduce((a,v)=>a+partesVenta(v).tr,0);
 
   summary.innerHTML=`<div id="dash-metrics" style="margin-bottom:1rem">
     <div class="metric rosa" style="display:inline-block;margin-right:12px;margin-bottom:8px;min-width:160px"><div class="mlabel">Total vendido</div><div class="mvalue">${fmt(totalDia)}</div></div>
@@ -3412,7 +3512,7 @@ function renderHistorial() {
       <td>${v.hora}</td>
       <td style="font-size:13px">${(v.items||[]).map(i=>esc(i.nombre)+' x'+i.cantidad).join('<br>')}</td>
       <td style="font-size:13px;color:var(--texto2)">${v.nota||'-'}</td>
-      <td><span class="badge ${v.metodoPago==='transferencia'?'rosa':'verde'}">${v.metodoPago==='transferencia'?'🏦 Transferencia':'💵 Efectivo'}</span></td>
+      <td>${badgeMetodo(v)}</td>
       <td style="font-weight:500">${fmt(v.total)}</td>
       <td style="color:var(--dorado-oscuro);font-weight:500">${fmt(v.ganancia)}</td>
       <td><div style="display:flex;gap:6px">
@@ -3455,6 +3555,13 @@ async function eliminarVenta(id) {
 // =============================================
 // REPORTES — PUNTO 2
 // =============================================
+let reporteDiaEsp = '';   // 'AAAA-MM-DD' cuando se busca un día específico
+let reporteMesEsp = '';   // 'AAAA-MM' cuando se busca un mes específico
+let reporteSemEsp = '';   // 'AAAA-MM-DD' (cualquier día de la semana que se busca)
+const MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const DIAS_CORTO = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
 function getRangoPeriodo(periodo) {
   const hoy = new Date();
   let desde, hasta;
@@ -3471,12 +3578,32 @@ function getRangoPeriodo(periodo) {
   } else if (periodo === 'mes') {
     desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     hasta = new Date(hoy); hasta.setHours(23,59,59,999);
+  } else if (periodo === 'semana-esp') {
+    const [y, m, d] = (reporteSemEsp || '').split('-').map(Number);
+    const base = y ? new Date(y, m - 1, d) : new Date(hoy);
+    const dow = base.getDay();
+    desde = new Date(base); desde.setDate(base.getDate() + (dow === 0 ? -6 : 1 - dow)); desde.setHours(0,0,0,0);
+    hasta = new Date(desde); hasta.setDate(desde.getDate() + 6); hasta.setHours(23,59,59,999);
+  } else if (periodo === 'dia-esp') {
+    const [y, m, d] = (reporteDiaEsp || '').split('-').map(Number);
+    const base = y ? new Date(y, m - 1, d) : new Date(hoy);
+    desde = new Date(base); desde.setHours(0,0,0,0);
+    hasta = new Date(base); hasta.setHours(23,59,59,999);
+  } else if (periodo === 'mes-esp') {
+    const [y, m] = (reporteMesEsp || '').split('-').map(Number);
+    const base = y ? new Date(y, m - 1, 1) : new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    desde = base;
+    hasta = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23,59,59,999);
   } else {
     desde = new Date(hoy.getFullYear(), 0, 1);
     hasta = new Date(hoy); hasta.setHours(23,59,59,999);
   }
 
   return { desde, hasta };
+}
+
+function kpiHTML(cls, icono, label, valor, sub) {
+  return `<div class="metric ${cls}"><div class="mtop"><span class="micon ${cls}"><i class="ti ${icono}"></i></span><span class="mlabel">${label}</span></div><div class="mvalue">${valor}</div>${sub ? `<div class="msub">${sub}</div>` : ''}</div>`;
 }
 
 function renderReportes(periodo) {
@@ -3488,102 +3615,262 @@ function renderReportes(periodo) {
   });
 
   const { desde, hasta } = getRangoPeriodo(periodo);
-  const ventas = DB.ventas.filter(v => {
-    const d = parseFechaCO(v.fecha);
-    return d >= desde && d <= hasta;
-  });
+  const enRango = f => { const d = parseFechaCO(f); return d >= desde && d <= hasta; };
+  const ventas = DB.ventas.filter(v => enRango(v.fecha));
+  const gastos = DB.gastos.filter(g => enRango(g.fecha));
+  const r = resumenMetodos(ventas, gastos);
 
-  const totalVendido   = ventas.reduce((a,v)=>a+v.total,0);
-  const totalGanancia  = ventas.reduce((a,v)=>a+v.ganancia,0);
-  const totalEfectivo  = ventas.filter(v=>v.metodoPago!=='transferencia').reduce((a,v)=>a+v.total,0);
-  const totalTransf    = ventas.filter(v=>v.metodoPago==='transferencia').reduce((a,v)=>a+v.total,0);
-  const ganEfectivo    = ventas.filter(v=>v.metodoPago!=='transferencia').reduce((a,v)=>a+v.ganancia,0);
-  const ganTransf      = ventas.filter(v=>v.metodoPago==='transferencia').reduce((a,v)=>a+v.ganancia,0);
+  const labels = {
+    dia:'hoy', semana:'esta semana', mes:'este mes', año:'este año',
+    'dia-esp': 'el ' + fechaCO(desde),
+    'semana-esp': 'la semana del ' + fechaCO(desde) + ' al ' + fechaCO(hasta),
+    'mes-esp': 'de ' + MESES_LARGO[desde.getMonth()] + ' ' + desde.getFullYear()
+  };
 
-  const labels = { dia:'hoy', semana:'esta semana', mes:'este mes', año:'este año' };
+  const rango = document.getElementById('reporte-rango');
+  if (rango) {
+    const mismo = fechaCO(desde) === fechaCO(hasta);
+    const conFechas = periodo !== 'dia-esp' && periodo !== 'semana-esp';
+    rango.textContent = 'Mostrando ' + labels[periodo] + (conFechas ? ' · ' + fechaCO(desde) + (mismo ? '' : ' – ' + fechaCO(hasta)) : '');
+  }
 
-  // Métricas principales — solo ventas, sin mezclar gastos
-  document.getElementById('reporte-metrics').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:1.5rem">
-      <div class="metric rosa"><div class="mlabel">Total vendido ${labels[periodo]}</div><div class="mvalue">${fmt(totalVendido)}</div></div>
-      <div class="metric dorado"><div class="mlabel">Ganancia ${labels[periodo]}</div><div class="mvalue">${fmt(totalGanancia)}</div></div>
-      <div class="metric"><div class="mlabel">Transacciones</div><div class="mvalue">${ventas.length}</div></div>
-    </div>`;
+  const promedio = ventas.length ? r.vendido / ventas.length : 0;
+
+  // Métricas principales
+  document.getElementById('reporte-metrics').innerHTML =
+    kpiHTML('rosa', 'ti-trending-up', 'Total vendido', fmt(r.vendido)) +
+    kpiHTML('dorado', 'ti-coin', 'Ganancia', fmt(r.ganancia)) +
+    kpiHTML('danger', 'ti-receipt-2', 'Gastos', fmt(r.gasto)) +
+    kpiHTML(r.neto < 0 ? 'danger' : 'neto', 'ti-wallet', 'Ganancia neta', fmt(r.neto), 'Ganancia − gastos') +
+    kpiHTML('teal', 'ti-shopping-bag', 'Transacciones', String(ventas.length), ventas.length ? 'Promedio ' + fmt(promedio) : '');
+
+  renderGraficaReporte(periodo, ventas, desde, labels[periodo]);
+
+  // Dona efectivo vs transferencia
+  const dona = document.getElementById('reporte-dona');
+  if (dona) {
+    if (r.vendido > 0) {
+      const C = 2 * Math.PI * 64, pEf = r.vEf / r.vendido;
+      dona.innerHTML = `
+        <div class="dona-wrap"><svg width="170" height="170" viewBox="0 0 170 170" role="img" aria-label="${Math.round(pEf*100)} % efectivo, ${100-Math.round(pEf*100)} % transferencia">
+          <circle cx="85" cy="85" r="64" fill="none" stroke="var(--dorado)" stroke-width="22"/>
+          <circle cx="85" cy="85" r="64" fill="none" stroke="var(--rosa)" stroke-width="22" stroke-dasharray="${(C*pEf).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 85 85)"/>
+          <text x="85" y="87" text-anchor="middle" class="dona-pct">${Math.round(pEf*100)} %</text>
+          <text x="85" y="107" text-anchor="middle" class="dona-sub">en efectivo</text>
+        </svg></div>
+        <div class="dona-leyenda">
+          <div><i class="rg-dot" style="background:var(--rosa)"></i><span>Efectivo</span><strong>${fmt(r.vEf)}</strong></div>
+          <div><i class="rg-dot" style="background:var(--dorado)"></i><span>Transferencia</span><strong>${fmt(r.vTr)}</strong></div>
+        </div>`;
+    } else {
+      dona.innerHTML = `<div class="estado-vacio" style="padding:1.5rem"><i class="ti ti-chart-donut"></i><p>Sin ventas en este periodo.</p></div>`;
+    }
+  }
 
   // Desglose por método de pago — ventas
   document.getElementById('reporte-pago').innerHTML = `
     <div class="reporte-pago-card">
       <span class="rp-icon">💵</span>
       <div class="rp-label">Ventas en Efectivo</div>
-      <div class="rp-value">${fmt(totalEfectivo)}</div>
-      <div class="rp-sub">Ganancia: ${fmt(ganEfectivo)}</div>
+      <div class="rp-value">${fmt(r.vEf)}</div>
+      <div class="rp-sub">Ganancia: ${fmt(r.gaEf)}</div>
     </div>
     <div class="reporte-pago-card">
       <span class="rp-icon">🏦</span>
       <div class="rp-label">Ventas por Transferencia</div>
-      <div class="rp-value">${fmt(totalTransf)}</div>
-      <div class="rp-sub">Ganancia: ${fmt(ganTransf)}</div>
+      <div class="rp-value">${fmt(r.vTr)}</div>
+      <div class="rp-sub">Ganancia: ${fmt(r.gaTr)}</div>
     </div>
-    <div class="reporte-pago-card" style="border:0.5px solid var(--rosa-medio)">
+    <div class="reporte-pago-card destacada">
       <span class="rp-icon">📊</span>
       <div class="rp-label">Total combinado</div>
-      <div class="rp-value">${fmt(totalVendido)}</div>
-      <div class="rp-sub">Ganancia total: ${fmt(totalGanancia)}</div>
+      <div class="rp-value">${fmt(r.vendido)}</div>
+      <div class="rp-sub">Ganancia total: ${fmt(r.ganancia)}</div>
     </div>`;
 
-  // Resumen neto del mes: siempre el mes actual, independiente del periodo elegido arriba
-  renderResumenNetoMes();
+  // Ganancia neta del periodo, separada por efectivo / transferencia
+  const neg = n => n < 0 ? ' neg' : '';
+  document.getElementById('reporte-neto').innerHTML = `
+    <div class="rep-ecuacion">
+      <div class="eq-caja"><span>Ganancia de ventas</span><strong class="dorado">${fmt(r.ganancia)}</strong></div>
+      <span class="eq-signo">−</span>
+      <div class="eq-caja"><span>Gastos</span><strong class="rojo">${fmt(r.gasto)}</strong></div>
+      <span class="eq-signo">=</span>
+      <div class="eq-caja eq-total"><span>Ganancia neta</span><strong>${fmt(r.neto)}</strong></div>
+    </div>
+    <div class="rep-neto-grid">
+      <div class="reporte-pago-card">
+        <span class="rp-icon">💵</span>
+        <div class="rp-label">Ganancia neta en Efectivo</div>
+        <div class="rp-value${neg(r.netoEf)}">${fmt(r.netoEf)}</div>
+        <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)}</div>
+      </div>
+      <div class="reporte-pago-card">
+        <span class="rp-icon">🏦</span>
+        <div class="rp-label">Ganancia neta en Transferencia</div>
+        <div class="rp-value${neg(r.netoTr)}">${fmt(r.netoTr)}</div>
+        <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)}</div>
+      </div>
+      <div class="reporte-pago-card destacada">
+        <span class="rp-icon">📊</span>
+        <div class="rp-label">Ganancia neta total</div>
+        <div class="rp-value${neg(r.neto)}">${fmt(r.neto)}</div>
+        <div class="rp-sub">Efectivo + Transferencia</div>
+      </div>
+    </div>`;
+
+  // Resumen neto: el mes actual, o el mes que se esté consultando
+  renderResumenNetoMes(periodo === 'mes-esp' ? desde : null);
+}
+
+// ---------- Gráfica de reportes ----------
+function horaDeVenta(v) {
+  const m = String(v.hora || '').match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([apAP])?/);
+  if (!m) return null;
+  let h = parseInt(m[1]);
+  if (m[3]) {
+    const pm = m[3].toLowerCase() === 'p';
+    if (pm && h < 12) h += 12;
+    if (!pm && h === 12) h = 0;
+  }
+  return (h >= 0 && h <= 23) ? h : null;
+}
+
+function reporteSerie(periodo, ventas, desde) {
+  let cats = [], titulo = '';
+  if (periodo === 'dia' || periodo === 'dia-esp') {
+    titulo = 'Ventas por hora';
+    let min = 6, max = 21;
+    const horas = ventas.map(horaDeVenta);
+    horas.forEach(h => { if (h != null) { min = Math.min(min, h); max = Math.max(max, h); } });
+    for (let h = min; h <= max; h++) cats.push({ label: h + 'h', tip: `${h}:00 a ${h}:59`, vendido: 0, ganancia: 0 });
+    ventas.forEach((v, i) => {
+      const h = horas[i]; if (h == null) return;
+      cats[h - min].vendido += v.total; cats[h - min].ganancia += v.ganancia;
+    });
+  } else if (periodo === 'semana' || periodo === 'semana-esp') {
+    titulo = 'Ventas por día de la semana';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(desde); d.setDate(desde.getDate() + i);
+      cats.push({ label: DIAS_CORTO[i], tip: DIAS_CORTO[i] + ' ' + fechaCO(d), vendido: 0, ganancia: 0 });
+    }
+    ventas.forEach(v => {
+      const i = Math.round((parseFechaCO(v.fecha) - desde) / 86400000);
+      if (cats[i]) { cats[i].vendido += v.total; cats[i].ganancia += v.ganancia; }
+    });
+  } else if (periodo === 'mes' || periodo === 'mes-esp') {
+    titulo = 'Ventas por día del mes';
+    const n = new Date(desde.getFullYear(), desde.getMonth() + 1, 0).getDate();
+    for (let i = 1; i <= n; i++) cats.push({ label: String(i), tip: fechaCO(new Date(desde.getFullYear(), desde.getMonth(), i)), vendido: 0, ganancia: 0 });
+    ventas.forEach(v => {
+      const i = parseFechaCO(v.fecha).getDate() - 1;
+      if (cats[i]) { cats[i].vendido += v.total; cats[i].ganancia += v.ganancia; }
+    });
+  } else {
+    titulo = 'Ventas por mes';
+    for (let i = 0; i < 12; i++) cats.push({ label: MESES_CORTO[i], tip: MESES_LARGO[i] + ' ' + desde.getFullYear(), vendido: 0, ganancia: 0 });
+    ventas.forEach(v => {
+      const i = parseFechaCO(v.fecha).getMonth();
+      if (cats[i]) { cats[i].vendido += v.total; cats[i].ganancia += v.ganancia; }
+    });
+  }
+  return { titulo, cats };
+}
+
+function fmtCorto(n) {
+  if (n >= 1000000) return '$' + (n / 1000000).toFixed(1).replace('.0', '').replace('.', ',') + ' M';
+  if (n >= 1000) return '$' + Math.round(n / 1000) + ' mil';
+  return '$' + Math.round(n);
+}
+
+function pasoBonito(x) {
+  const p = Math.pow(10, Math.floor(Math.log10(x)));
+  const r = x / p;
+  return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * p;
+}
+
+function renderGraficaReporte(periodo, ventas, desde, etiqueta) {
+  const cont = document.getElementById('reporte-grafica');
+  const tit = document.getElementById('reporte-grafica-titulo');
+  if (!cont) return;
+  const { titulo, cats } = reporteSerie(periodo, ventas, desde);
+  tit.textContent = `${titulo} — ${etiqueta}`;
+
+  if (!ventas.length) {
+    cont.innerHTML = `<div class="estado-vacio" style="padding:1.5rem"><i class="ti ti-chart-bar"></i><p>Sin ventas en este periodo.</p></div>`;
+    return;
+  }
+
+  const n = cats.length;
+  const W = Math.max(cont.clientWidth || 640, n * 30 + 70, 560), H = 300, ml = 62, mr = 12, mt = 18, mb = 34;
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const maxVal = Math.max(1, ...cats.map(x => Math.max(x.vendido, x.ganancia, 0)));
+  const paso = pasoBonito(maxVal / 4);
+  const tope = Math.ceil(maxVal / paso) * paso;
+  const y = v => mt + ih - (Math.max(0, v) / tope) * ih;
+  const gw = iw / n, bw = Math.min(18, gw * 0.38);
+
+  let svg = '';
+  for (let t = 0; t <= tope + 0.001; t += paso) {
+    svg += `<line x1="${ml}" x2="${W - mr}" y1="${y(t)}" y2="${y(t)}" class="rg-grid"/>`;
+    svg += `<text x="${ml - 8}" y="${y(t) + 4}" text-anchor="end">${fmtCorto(t)}</text>`;
+  }
+  cats.forEach((x, i) => {
+    const cx = ml + gw * i + gw / 2;
+    const hv = (Math.max(0, x.vendido) / tope) * ih, hg = (Math.max(0, x.ganancia) / tope) * ih;
+    svg += `<g><title>${x.tip}\nVendido: ${fmt(x.vendido)}\nGanancia: ${fmt(x.ganancia)}</title>
+      <rect x="${cx - bw - 1}" y="${mt + ih - hv}" width="${bw}" height="${hv}" rx="3" class="rg-vendido"/>
+      <rect x="${cx + 1}" y="${mt + ih - hg}" width="${bw}" height="${hg}" rx="3" class="rg-ganancia"/>
+      <rect x="${cx - gw / 2}" y="${mt}" width="${gw}" height="${ih}" fill="transparent"/></g>`;
+    if (n <= 12 && x.vendido > 0) svg += `<text x="${cx - bw / 2 - 1}" y="${mt + ih - hv - 5}" text-anchor="middle" class="rg-valor">${fmtCorto(x.vendido)}</text>`;
+    svg += `<text x="${cx}" y="${H - 12}" text-anchor="middle">${x.label}</text>`;
+  });
+
+  cont.innerHTML = `
+    <div class="rg-leyenda"><span><i class="rg-dot rg-vendido"></i> Vendido</span><span><i class="rg-dot rg-ganancia"></i> Ganancia</span></div>
+    <div class="tabla-wrap"><svg class="rep-graf" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${titulo}">${svg}</svg></div>`;
 }
 
 // Resumen neto del mes actual: ganancia de ventas menos gastos, y ventas menos pagos a proveedores.
 // Siempre calculado para el mes en curso (se "reinicia" solo porque nunca acumula meses anteriores).
-function renderResumenNetoMes() {
-  const hoy = new Date();
+function renderResumenNetoMes(ref) {
+  const hoy = ref || new Date();
+  const tit = document.getElementById('resumen-neto-titulo');
+  if (tit) tit.textContent = ref ? `Resumen neto de ${MESES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}` : 'Resumen neto del mes';
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   const finMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0, 23,59,59,999);
 
   const ventasMes = DB.ventas.filter(v => { const d = parseFechaCO(v.fecha); return d>=inicioMes && d<=finMes; });
   const gastosMes = DB.gastos.filter(g => { const d = parseFechaCO(g.fecha); return d>=inicioMes && d<=finMes; });
-
-  const totalVendidoMes = ventasMes.reduce((a,v)=>a+v.total,0);
-  const gananciaMes     = ventasMes.reduce((a,v)=>a+v.ganancia,0);
-  const totalGastosMes  = gastosMes.reduce((a,g)=>a+g.monto,0);
-  const gananciaNetaMes = gananciaMes - totalGastosMes;
-
-  const ganEfectivoMes    = ventasMes.filter(v=>v.metodoPago!=='transferencia').reduce((a,v)=>a+v.ganancia,0);
-  const ganTransfMes      = ventasMes.filter(v=>v.metodoPago==='transferencia').reduce((a,v)=>a+v.ganancia,0);
-  const gastosEfectivoMes = gastosMes.filter(g=>g.metodoPago!=='transferencia').reduce((a,g)=>a+g.monto,0);
-  const gastosTransfMes   = gastosMes.filter(g=>g.metodoPago==='transferencia').reduce((a,g)=>a+g.monto,0);
-  const netoEfectivo      = ganEfectivoMes - gastosEfectivoMes;
-  const netoTransferencia = ganTransfMes - gastosTransfMes;
+  const r = resumenMetodos(ventasMes, gastosMes);
 
   const pagosProveedoresMes = DB.proveedores.flatMap(p => p.abonos||[])
     .filter(a => { const d = parseFechaCO(a.fecha); return d>=inicioMes && d<=finMes; })
     .reduce((s,a)=>s+a.monto,0);
-  const ventasNetasMes = totalVendidoMes - pagosProveedoresMes;
+  const ventasNetasMes = r.vendido - pagosProveedoresMes;
 
   document.getElementById('resumen-neto-metrics').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
-      <div class="metric dorado"><div class="mlabel">Ganancia del mes</div><div class="mvalue">${fmt(gananciaMes)}</div></div>
-      <div class="metric danger"><div class="mlabel">Gastos del mes</div><div class="mvalue">${fmt(totalGastosMes)}</div></div>
-      <div class="metric dorado"><div class="mlabel">Ganancia neta del mes</div><div class="mvalue">${fmt(gananciaNetaMes)}</div></div>
-      <div class="metric"><div class="mlabel">Ventas del mes</div><div class="mvalue">${fmt(totalVendidoMes)}</div></div>
-      <div class="metric danger"><div class="mlabel">Pagos a proveedores (mes)</div><div class="mvalue">${fmt(pagosProveedoresMes)}</div></div>
-      <div class="metric"><div class="mlabel">Ventas netas del mes</div><div class="mvalue">${fmt(ventasNetasMes)}</div></div>
+    <div class="rep-kpis">
+      ${kpiHTML('dorado', 'ti-coin', 'Ganancia del mes', fmt(r.ganancia))}
+      ${kpiHTML('danger', 'ti-receipt-2', 'Gastos del mes', fmt(r.gasto))}
+      ${kpiHTML(r.neto < 0 ? 'danger' : 'neto', 'ti-wallet', 'Ganancia neta del mes', fmt(r.neto))}
+      ${kpiHTML('rosa', 'ti-trending-up', 'Ventas del mes', fmt(r.vendido))}
+      ${kpiHTML('danger', 'ti-building-warehouse', 'Pagos a proveedores', fmt(pagosProveedoresMes))}
+      ${kpiHTML('teal', 'ti-scale', 'Ventas netas del mes', fmt(ventasNetasMes))}
     </div>`;
 
   document.getElementById('resumen-neto-pago').innerHTML = `
     <div class="reporte-pago-card">
       <span class="rp-icon">💵</span>
       <div class="rp-label">Neto en Efectivo</div>
-      <div class="rp-value">${fmt(netoEfectivo)}</div>
-      <div class="rp-sub">Ganancia ${fmt(ganEfectivoMes)} − Gastos ${fmt(gastosEfectivoMes)}</div>
+      <div class="rp-value">${fmt(r.netoEf)}</div>
+      <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)}</div>
     </div>
     <div class="reporte-pago-card">
       <span class="rp-icon">🏦</span>
       <div class="rp-label">Neto en Transferencia</div>
-      <div class="rp-value">${fmt(netoTransferencia)}</div>
-      <div class="rp-sub">Ganancia ${fmt(ganTransfMes)} − Gastos ${fmt(gastosTransfMes)}</div>
+      <div class="rp-value">${fmt(r.netoTr)}</div>
+      <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)}</div>
     </div>`;
 }
 
@@ -4511,6 +4798,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Gastos
   document.getElementById('btn-abrir-modal-gasto').addEventListener('click', abrirModalGasto);
   document.getElementById('btn-guardar-gasto').addEventListener('click', guardarGasto);
+  document.querySelectorAll('input[name="gasto-metodo"]').forEach(r => r.addEventListener('change', gastoActualizarMixto));
+  document.getElementById('gasto-monto').addEventListener('input', () => {
+    if (document.querySelector('input[name="gasto-metodo"]:checked').value === 'mixto') gastoMixtoDesde('monto');
+  });
+  document.getElementById('gasto-mixto-efectivo').addEventListener('input', () => gastoMixtoDesde('ef'));
+  document.getElementById('gasto-mixto-transferencia').addEventListener('input', () => gastoMixtoDesde('tr'));
   document.querySelectorAll('.gasto-cat-btn').forEach(b =>
     b.addEventListener('click', () => seleccionarCategoriaGasto(b.dataset.cat, b)));
 
@@ -4520,8 +4813,24 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('hist-fecha').addEventListener('change', renderHistorial);
 
   // Reportes
-  document.querySelectorAll('.btn-reporte').forEach(b=>
-    b.addEventListener('click',()=> renderReportes(b.dataset.periodo)));
+  const limpiarEspecificos = () => {
+    reporteDiaEsp = ''; reporteSemEsp = ''; reporteMesEsp = '';
+    ['rep-dia','rep-sem','rep-mes'].forEach(id => { document.getElementById(id).value = ''; });
+  };
+  document.querySelectorAll('.btn-reporte').forEach(b =>
+    b.addEventListener('click', () => { limpiarEspecificos(); renderReportes(b.dataset.periodo); }));
+  document.getElementById('rep-dia').addEventListener('change', e => {
+    const v = e.target.value; limpiarEspecificos(); e.target.value = v; reporteDiaEsp = v;
+    renderReportes(v ? 'dia-esp' : 'semana');
+  });
+  document.getElementById('rep-sem').addEventListener('change', e => {
+    const v = e.target.value; limpiarEspecificos(); e.target.value = v; reporteSemEsp = v;
+    renderReportes(v ? 'semana-esp' : 'semana');
+  });
+  document.getElementById('rep-mes').addEventListener('change', e => {
+    const v = e.target.value; limpiarEspecificos(); e.target.value = v; reporteMesEsp = v;
+    renderReportes(v ? 'mes-esp' : 'semana');
+  });
 
   // Precios por cliente
   inicializarBuscadorCliente('pre', 'pre-cliente-buscar', 'pre-cliente-resultados', seleccionarClientePrecios);
