@@ -2962,8 +2962,16 @@ function imprimirBoucherHTML(venta) {
   </div>
   `;
 
-  prepararImpresion('venta-print');
-  window.print();
+  // Los logos se cargan al insertar el HTML; si se imprime de inmediato el
+  // diálogo se abre antes de que terminen de cargar y salen en blanco.
+  const imgs = Array.from(document.querySelectorAll('#venta-print-contenido img'));
+  Promise.all(imgs.map(im => (im.complete && im.naturalWidth > 0) ? Promise.resolve() : new Promise(res => {
+    im.onload = im.onerror = res;
+    setTimeout(res, 3000);
+  }))).then(() => {
+    prepararImpresion('venta-print');
+    window.print();
+  });
 }
 
 // NUEVO — imprimirBoucher(venta) ahora intenta primero la impresión térmica
