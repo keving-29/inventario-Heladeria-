@@ -830,7 +830,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--rosa); backgroun
 .rep-buscar { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--texto2); }
 #reporte-rango { margin-left: auto; font-size: 12px; color: var(--texto2); }
 
-.rep-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 1.25rem; }
+.rep-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 14px; margin-bottom: 1.25rem; }
 #reporte-fila { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 14px; margin-bottom: 0.5rem; align-items: stretch; }
 #reporte-fila .card { margin-bottom: 0; }
 .rep-nota { margin: -0.6rem 0 0.4rem; font-size: 12px; color: var(--texto2); }
@@ -938,3 +938,32 @@ input:focus, select:focus, textarea:focus { border-color: var(--rosa); backgroun
 .costo-cat-btn:hover { background: var(--rosa-claro); }
 .costo-cat-btn.selected { background: var(--rosa); color: #fff; border-color: var(--rosa); }
 .costo-cat-btn.selected i { color: #fff; }
+
+
+/* GANANCIA NETA — cascada por método */
+.neto-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.neto-card { background: var(--card); border: 1px solid var(--borde); border-radius: 16px; box-shadow: var(--sombra); padding: 22px; display: flex; flex-direction: column; }
+.neto-cab { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+.neto-ico { width: 36px; height: 36px; border-radius: 10px; background: var(--rosa-claro); display: inline-flex; align-items: center; justify-content: center; font-size: 18px; }
+.neto-card:nth-child(2) .neto-ico { background: var(--malva-claro); }
+.neto-fila { display: flex; justify-content: space-between; padding: 10px 0; font-size: 14px; border-top: 1px dashed var(--borde); }
+.neto-fila:first-of-type { border-top: 0; }
+.neto-fila span { color: var(--texto2); }
+.neto-fila strong { color: var(--texto2); }
+.neto-fila strong.g { color: var(--dorado-oscuro); }
+.neto-fila strong.c { color: #A32D2D; }
+.neto-res { margin-top: auto; padding-top: 16px; border-top: 2px solid var(--borde); }
+.neto-et { font-size: 12px; color: var(--texto2); }
+.neto-val { font-family: var(--fuente-titulo); font-size: 32px; font-weight: 600; color: #1B6B43; line-height: 1.15; }
+.neto-val.neg { color: #A32D2D; }
+.neto-card.total { background: var(--rosa); border-color: var(--rosa); box-shadow: 0 6px 18px rgba(139,26,26,0.25); color: #fff; }
+.neto-card.total .neto-ico { background: rgba(255,255,255,0.16); }
+.neto-card.total .neto-fila { border-top-color: rgba(255,255,255,0.3); }
+.neto-card.total .neto-fila span { color: var(--rosa-claro); }
+.neto-card.total .neto-fila strong, .neto-card.total .neto-fila strong.c { color: #fff; }
+.neto-card.total .neto-fila strong.g { color: #F0D9A0; }
+.neto-card.total .neto-res { border-top-color: rgba(255,255,255,0.3); }
+.neto-card.total .neto-et { color: var(--rosa-claro); }
+.neto-card.total .neto-val { color: #fff; font-size: 36px; }
+.neto-card.total .neto-val.neg { color: #FFD3CF; }
+@media (max-width: 900px) { .neto-cards { grid-template-columns: minmax(0, 1fr); } }

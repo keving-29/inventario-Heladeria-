@@ -3843,38 +3843,20 @@ function renderReportes(periodo) {
       <div class="rp-sub">Ganancia total: ${fmt(r.ganancia)}</div>
     </div>`;
 
-  // Ganancia neta del periodo, separada por efectivo / transferencia
-  const neg = n => n < 0 ? ' neg' : '';
-  document.getElementById('reporte-neto').innerHTML = `
-    <div class="rep-ecuacion">
-      <div class="eq-caja"><span>Ganancia de ventas</span><strong class="dorado">${fmt(r.ganancia)}</strong></div>
-      <span class="eq-signo">−</span>
-      <div class="eq-caja"><span>Gastos</span><strong class="rojo">${fmt(r.gasto)}</strong></div>
-      <span class="eq-signo">−</span>
-      <div class="eq-caja"><span>Costos</span><strong class="rojo">${fmt(r.costo)}</strong></div>
-      <span class="eq-signo">=</span>
-      <div class="eq-caja eq-total"><span>Ganancia neta</span><strong>${fmt(r.neto)}</strong></div>
-    </div>
-    <div class="rep-neto-grid">
-      <div class="reporte-pago-card">
-        <span class="rp-icon">💵</span>
-        <div class="rp-label">Ganancia neta en Efectivo</div>
-        <div class="rp-value${neg(r.netoEf)}">${fmt(r.netoEf)}</div>
-        <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)} − Costos ${fmt(r.csEf)}</div>
-      </div>
-      <div class="reporte-pago-card">
-        <span class="rp-icon">🏦</span>
-        <div class="rp-label">Ganancia neta en Transferencia</div>
-        <div class="rp-value${neg(r.netoTr)}">${fmt(r.netoTr)}</div>
-        <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)} − Costos ${fmt(r.csTr)}</div>
-      </div>
-      <div class="reporte-pago-card destacada">
-        <span class="rp-icon">📊</span>
-        <div class="rp-label">Ganancia neta total</div>
-        <div class="rp-value${neg(r.neto)}">${fmt(r.neto)}</div>
-        <div class="rp-sub">Efectivo + Transferencia</div>
-      </div>
+  // Ganancia neta del periodo: una "cascada" por método de pago
+  const cascada = (cls, icono, titulo, gan, gas, cos, neto, etiqueta) => `
+    <div class="neto-card ${cls}">
+      <div class="neto-cab"><span class="neto-ico">${icono}</span><span>${titulo}</span></div>
+      <div class="neto-fila"><span>Ganancia</span><strong class="g">+ ${fmt(gan)}</strong></div>
+      <div class="neto-fila"><span>Gastos</span><strong>− ${fmt(gas)}</strong></div>
+      <div class="neto-fila"><span>Costos</span><strong class="${cos > 0 ? 'c' : ''}">− ${fmt(cos)}</strong></div>
+      <div class="neto-res"><div class="neto-et">${etiqueta}</div><div class="neto-val${neto < 0 ? ' neg' : ''}">${fmt(neto)}</div></div>
     </div>`;
+  document.getElementById('reporte-neto').innerHTML = `<div class="neto-cards">` +
+    cascada('', '💵', 'En efectivo', r.gaEf, r.gsEf, r.csEf, r.netoEf, 'Te queda') +
+    cascada('', '🏦', 'Por transferencia', r.gaTr, r.gsTr, r.csTr, r.netoTr, 'Te queda') +
+    cascada('total', '📊', 'Total del periodo', r.ganancia, r.gasto, r.costo, r.neto, 'Ganancia neta total') +
+    `</div>`;
 
   // Costos del periodo por categoría
   const contCostos = document.getElementById('reporte-costos');
@@ -3888,8 +3870,6 @@ function renderReportes(periodo) {
       : `<p style="font-size:13px;color:var(--texto2)">Sin costos registrados en este periodo.</p>`;
   }
 
-  // Resumen neto: el mes actual, o el mes que se esté consultando
-  renderResumenNetoMes(periodo === 'mes-esp' ? desde : null);
 }
 
 // ---------- Gráfica de reportes ----------
@@ -3998,51 +3978,6 @@ function renderGraficaReporte(periodo, ventas, desde, etiqueta) {
   cont.innerHTML = `
     <div class="rg-leyenda"><span><i class="rg-dot rg-vendido"></i> Vendido</span><span><i class="rg-dot rg-ganancia"></i> Ganancia</span></div>
     <div class="tabla-wrap"><svg class="rep-graf" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${titulo}">${svg}</svg></div>`;
-}
-
-// Resumen neto del mes actual: ganancia de ventas menos gastos, y ventas menos pagos a proveedores.
-// Siempre calculado para el mes en curso (se "reinicia" solo porque nunca acumula meses anteriores).
-function renderResumenNetoMes(ref) {
-  const hoy = ref || new Date();
-  const tit = document.getElementById('resumen-neto-titulo');
-  if (tit) tit.textContent = ref ? `Resumen neto de ${MESES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}` : 'Resumen neto del mes';
-  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  const finMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0, 23,59,59,999);
-
-  const ventasMes = DB.ventas.filter(v => { const d = parseFechaCO(v.fecha); return d>=inicioMes && d<=finMes; });
-  const gastosMes = DB.gastos.filter(g => { const d = parseFechaCO(g.fecha); return d>=inicioMes && d<=finMes; });
-  const costosMes = DB.costos.filter(c => { const d = parseFechaCO(c.fecha); return d>=inicioMes && d<=finMes; });
-  const r = resumenMetodos(ventasMes, gastosMes, costosMes);
-
-  const pagosProveedoresMes = DB.proveedores.flatMap(p => p.abonos||[])
-    .filter(a => { const d = parseFechaCO(a.fecha); return d>=inicioMes && d<=finMes; })
-    .reduce((s,a)=>s+a.monto,0);
-  const ventasNetasMes = r.vendido - pagosProveedoresMes;
-
-  document.getElementById('resumen-neto-metrics').innerHTML = `
-    <div class="rep-kpis">
-      ${kpiHTML('dorado', 'ti-coin', 'Ganancia del mes', fmt(r.ganancia))}
-      ${kpiHTML('danger', 'ti-receipt-2', 'Gastos del mes', fmt(r.gasto))}
-      ${kpiHTML('danger', 'ti-box-seam', 'Costos del mes', fmt(r.costo))}
-      ${kpiHTML(r.neto < 0 ? 'danger' : 'neto', 'ti-wallet', 'Ganancia neta del mes', fmt(r.neto))}
-      ${kpiHTML('rosa', 'ti-trending-up', 'Ventas del mes', fmt(r.vendido))}
-      ${kpiHTML('danger', 'ti-building-warehouse', 'Pagos a proveedores', fmt(pagosProveedoresMes))}
-      ${kpiHTML('teal', 'ti-scale', 'Ventas netas del mes', fmt(ventasNetasMes))}
-    </div>`;
-
-  document.getElementById('resumen-neto-pago').innerHTML = `
-    <div class="reporte-pago-card">
-      <span class="rp-icon">💵</span>
-      <div class="rp-label">Neto en Efectivo</div>
-      <div class="rp-value">${fmt(r.netoEf)}</div>
-      <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)} − Costos ${fmt(r.csEf)}</div>
-    </div>
-    <div class="reporte-pago-card">
-      <span class="rp-icon">🏦</span>
-      <div class="rp-label">Neto en Transferencia</div>
-      <div class="rp-value">${fmt(r.netoTr)}</div>
-      <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)} − Costos ${fmt(r.csTr)}</div>
-    </div>`;
 }
 
 // =============================================
