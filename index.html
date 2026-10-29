@@ -45,9 +45,9 @@
           <button class="nav-tab" data-tab="cotizacion"><i class="ti ti-file-invoice"></i> Cotización</button>
           <button class="nav-tab" data-tab="traslado"><i class="ti ti-truck"></i> Traslado</button>
           <button class="nav-tab" data-tab="deudores"><i class="ti ti-users"></i> Deudores</button>
-          <button class="nav-tab" data-tab="anticipos"><i class="ti ti-cash-banknote"></i> Anticipos</button>
           <button class="nav-tab" data-tab="proveedores"><i class="ti ti-building-warehouse"></i> Proveedores</button>
           <button class="nav-tab" data-tab="gastos"><i class="ti ti-receipt-2"></i> Gastos</button>
+          <button class="nav-tab" data-tab="costos"><i class="ti ti-box-seam"></i> Costos</button>
           <button class="nav-tab" data-tab="historial"><i class="ti ti-history"></i> Historial</button>
           <button class="nav-tab" data-tab="reportes"><i class="ti ti-chart-pie"></i> Reportes</button>
           <button class="nav-tab" data-tab="config"><i class="ti ti-settings"></i> Config</button>
@@ -354,6 +354,20 @@
         </div>
       </section>
 
+      <!-- COSTOS -->
+      <section id="panel-costos" class="panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Costos de operación</h2>
+            <button class="btn-primary" id="btn-abrir-modal-costo">+ Agregar costo</button>
+          </div>
+          <p style="font-size:12px;color:var(--texto2);margin-bottom:1rem">Insumos que compras para vender (vasos, bolsas, cucharas…). Se descuentan de la ganancia y del total del día, aparte de los gastos del local.</p>
+          <div id="costos-resumen"></div>
+          <div id="costos-categorias-mes"></div>
+          <div id="costos-contenido"></div>
+        </div>
+      </section>
+
       <!-- HISTORIAL -->
       <section id="panel-historial" class="panel">
         <div class="card">
@@ -413,6 +427,10 @@
         <!-- Ganancia neta del periodo -->
         <p class="rep-seccion">Ganancia neta del periodo</p>
         <div id="reporte-neto"></div>
+
+        <!-- Costos del periodo -->
+        <p class="rep-seccion">Costos del periodo por categoría</p>
+        <div id="reporte-costos" class="rep-neto-grid"></div>
 
         <!-- Resumen neto del mes (independiente de las pestañas de arriba) -->
         <div class="card" style="margin-top:1.5rem;border:1px solid var(--rosa-medio)">
@@ -758,6 +776,44 @@
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="abono-metodo" value="transferencia"> 🏦 Transferencia</label>
       </div>
       <button class="btn-primary" id="btn-guardar-abono" style="width:100%">Registrar abono</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Agregar costo -->
+  <div id="modal-costo" class="modal-bg hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Agregar costo</h3>
+        <button class="btn-cerrar-modal" data-modal="modal-costo">✕</button>
+      </div>
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Categoría</p>
+      <div id="costo-categorias">
+        <button type="button" class="costo-cat-btn" data-cat="Vasos"><i class="ti ti-cup"></i> Vasos</button>
+        <button type="button" class="costo-cat-btn" data-cat="Bolsas"><i class="ti ti-shopping-bag"></i> Bolsas</button>
+        <button type="button" class="costo-cat-btn" data-cat="Cucharas"><i class="ti ti-tools-kitchen-2"></i> Cucharas</button>
+        <button type="button" class="costo-cat-btn" data-cat="Servilletas"><i class="ti ti-note"></i> Servilletas</button>
+        <button type="button" class="costo-cat-btn" data-cat="Conos"><i class="ti ti-ice-cream-2"></i> Conos</button>
+        <button type="button" class="costo-cat-btn" data-cat="Otros"><i class="ti ti-dots"></i> Otros</button>
+      </div>
+      <input type="number" id="costo-monto" placeholder="Monto *" style="margin-top:14px">
+      <p style="font-size:11px;color:var(--texto2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Método de pago</p>
+      <div style="display:flex;gap:20px;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="costo-metodo" value="efectivo" checked=""> 💵 Efectivo</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="costo-metodo" value="transferencia"> 🏦 Transferencia</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="costo-metodo" value="mixto"> 🔀 Combinado</label>
+      </div>
+      <div id="costo-mixto-box" class="hidden" style="background:var(--fondo);border:1px solid var(--borde);border-radius:10px;padding:12px;margin-bottom:10px">
+        <label style="font-size:12px;color:var(--texto2)">💵 Efectivo</label>
+        <input type="number" id="costo-mixto-efectivo" min="0" value="0">
+        <label style="font-size:12px;color:var(--texto2)">🏦 Transferencia</label>
+        <input type="number" id="costo-mixto-transferencia" min="0" value="0">
+        <p id="costo-mixto-info" style="font-size:12px;font-weight:500"></p>
+      </div>
+      <input type="text" id="costo-nota" placeholder="Detalle (ej: tapas, pitillos, proveedor)">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-cerrar-modal" data-modal="modal-costo" style="flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-guardar-costo" style="flex:1">Guardar</button>
+      </div>
     </div>
   </div>
 

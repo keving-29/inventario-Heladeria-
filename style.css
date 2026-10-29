@@ -929,3 +929,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--rosa); backgroun
 }
 
 @media print { body { background: #fff !important; } }
+
+
+/* COSTOS — categorías (mismo aspecto que Gastos) */
+#costo-categorias { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.costo-cat-btn { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--fuente-cuerpo); transition: all 0.15s; }
+.costo-cat-btn i { font-size: 16px; color: var(--rosa-medio); }
+.costo-cat-btn:hover { background: var(--rosa-claro); }
+.costo-cat-btn.selected { background: var(--rosa); color: #fff; border-color: var(--rosa); }
+.costo-cat-btn.selected i { color: #fff; }

@@ -15,6 +15,7 @@ let DB = {
   anticipos: [],
   proveedores: [],
   gastos:    [],
+  costos:    [],
   traslados: [],
   liquidaciones: [],
   config:    { stockMin: 5, trasladoContador: 0 }
@@ -54,7 +55,7 @@ const buscadoresProducto = {};
 
 // Secciones privadas: piden clave cada vez que se intenta entrar
 const CLAVE_SECCIONES = 'cremhelado1228';
-const SECCIONES_PROTEGIDAS = ['inventario','historial','reportes','config'];
+const SECCIONES_PROTEGIDAS = [];   // sin claves: todas las secciones abren directo
 let panelPendiente = null;
 
 // Sync automático/login: solo trae ventas recientes (más que suficiente para
@@ -232,6 +233,16 @@ async function sincronizar(ventasDias) {
     }));
   }
 
+  if (datos.Costos && datos.Costos.length > 1) {
+    DB.costos = datos.Costos.slice(1).map(f => ({
+      id: String(f[0]), categoria: String(f[1]||''), monto: Number(f[2])||0,
+      metodoPago: String(f[3]||'efectivo'), fecha: isoAFechaCO(f[4]), hora: String(f[5]||''),
+      nota: String(f[6]||''),
+      efectivo: (f[7]!==undefined&&f[7]!=='') ? Number(f[7]) : undefined,
+      transferencia: (f[8]!==undefined&&f[8]!=='') ? Number(f[8]) : undefined
+    }));
+  }
+
   if (datos.Traslados && datos.Traslados.length > 1) {
     DB.traslados = datos.Traslados.slice(1).map(f => ({
       id: String(f[0]), numero: String(f[1]||''), fecha: isoAFechaCO(f[2]), hora: String(f[3]||''),
@@ -277,6 +288,8 @@ async function inicializarSheets() {
     await sheetsEscribir('append', 'Proveedores', ['ID','Empresa','FechaLlegadaPedido','Monto','NumeroCuotas','FechaLimite','Fecha','Hora','Abonos','Pagada']);
   if (!datos.Gastos || datos.Gastos.length === 0)
     await sheetsEscribir('append', 'Gastos', ['ID','Categoria','Monto','MetodoPago','Fecha','Hora','Nota','Efectivo','Transferencia']);
+  if (!datos.Costos || datos.Costos.length === 0)
+    await sheetsEscribir('append', 'Costos', ['ID','Categoria','Monto','MetodoPago','Fecha','Hora','Nota','Efectivo','Transferencia']);
   if (!datos.Traslados || datos.Traslados.length === 0)
     await sheetsEscribir('append', 'Traslados', ['ID','Numero','Fecha','Hora','Items']);
   if (!datos.Liquidaciones || datos.Liquidaciones.length === 0)
@@ -529,6 +542,7 @@ async function mostrarPanelInterno(panel) {
   if (panel === 'anticipos')  renderAnticipos();
   if (panel === 'proveedores') renderProveedores();
   if (panel === 'gastos')     renderGastos();
+  if (panel === 'costos')     renderCostos();
   // El sync automático solo trae ventas recientes; Historial/Reportes pueden
   // necesitar cualquier fecha pasada, así que aquí sí se trae el historial completo.
   if (panel === 'historial')  { renderHistorial(); await sincronizar(); renderHistorial(); }
@@ -2309,11 +2323,13 @@ function partesGasto(g) {
   else if (g.metodoPago === 'mixto' && g.transferencia != null) tr = Math.min(monto, Math.max(0, g.transferencia));
   return { ef: monto - tr, tr };
 }
-function resumenMetodos(ventas, gastos) {
-  const r = { vendido:0, ganancia:0, vEf:0, vTr:0, gaEf:0, gaTr:0, gasto:0, gsEf:0, gsTr:0 };
+function resumenMetodos(ventas, gastos, costos) {
+  costos = costos || [];
+  const r = { vendido:0, ganancia:0, vEf:0, vTr:0, gaEf:0, gaTr:0, gasto:0, gsEf:0, gsTr:0, costo:0, csEf:0, csTr:0 };
   ventas.forEach(v => { const p = partesVenta(v); r.vendido += v.total; r.ganancia += v.ganancia; r.vEf += p.ef; r.vTr += p.tr; r.gaEf += p.gEf; r.gaTr += p.gTr; });
   gastos.forEach(g => { const p = partesGasto(g); r.gasto += g.monto; r.gsEf += p.ef; r.gsTr += p.tr; });
-  r.netoEf = r.gaEf - r.gsEf; r.netoTr = r.gaTr - r.gsTr; r.neto = r.ganancia - r.gasto;
+  costos.forEach(c => { const p = partesGasto(c); r.costo += c.monto; r.csEf += p.ef; r.csTr += p.tr; });
+  r.netoEf = r.gaEf - r.gsEf - r.csEf; r.netoTr = r.gaTr - r.gsTr - r.csTr; r.neto = r.ganancia - r.gasto - r.costo;
   return r;
 }
 function badgeMetodo(x) {
@@ -2390,6 +2406,130 @@ function renderGastos() {
 }
 
 // =============================================
+// COSTOS (insumos: vasos, bolsas, cucharas…)
+// =============================================
+let costoCategoriaSeleccionada = null;
+
+function seleccionarCategoriaCosto(cat, btn) {
+  costoCategoriaSeleccionada = cat;
+  document.querySelectorAll('.costo-cat-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function abrirModalCosto() {
+  costoCategoriaSeleccionada = null;
+  document.querySelectorAll('.costo-cat-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('costo-monto').value = '';
+  document.getElementById('costo-nota').value = '';
+  document.querySelector('input[name="costo-metodo"][value="efectivo"]').checked = true;
+  document.getElementById('costo-mixto-efectivo').value = 0;
+  document.getElementById('costo-mixto-transferencia').value = 0;
+  document.getElementById('costo-mixto-box').classList.add('hidden');
+  abrirModal('modal-costo');
+}
+
+function costoActualizarMixto() {
+  const mixto = document.querySelector('input[name="costo-metodo"]:checked').value === 'mixto';
+  document.getElementById('costo-mixto-box').classList.toggle('hidden', !mixto);
+  if (mixto) costoMixtoDesde('monto');
+}
+function costoMixtoDesde(origen) {
+  const monto = parseFloat(document.getElementById('costo-monto').value)||0;
+  const ef = document.getElementById('costo-mixto-efectivo');
+  const tr = document.getElementById('costo-mixto-transferencia');
+  if (origen === 'tr') ef.value = Math.max(0, monto - (parseFloat(tr.value)||0));
+  else tr.value = Math.max(0, monto - (parseFloat(ef.value)||0));
+  const resto = monto - (parseFloat(ef.value)||0) - (parseFloat(tr.value)||0);
+  const info = document.getElementById('costo-mixto-info');
+  info.textContent = Math.round(resto) === 0 ? 'Cuadra con el monto ✓' : `Falta repartir ${fmt(resto)}`;
+  info.style.color = Math.round(resto) === 0 ? 'var(--malva)' : '#A32D2D';
+}
+
+async function guardarCosto() {
+  const monto = parseFloat(document.getElementById('costo-monto').value)||0;
+  const metodoPago = document.querySelector('input[name="costo-metodo"]:checked').value;
+  const nota = document.getElementById('costo-nota').value.trim();
+  if (!costoCategoriaSeleccionada) { alert('Selecciona una categoría de costo'); return; }
+  if (!monto || monto<=0) { alert('Ingresa un monto válido'); return; }
+
+  let efectivo, transferencia;
+  if (metodoPago === 'mixto') {
+    efectivo = parseFloat(document.getElementById('costo-mixto-efectivo').value)||0;
+    transferencia = parseFloat(document.getElementById('costo-mixto-transferencia').value)||0;
+    if (efectivo < 0 || transferencia < 0 || Math.round(efectivo+transferencia) !== Math.round(monto)) {
+      alert('El pago combinado no cuadra: efectivo + transferencia debe ser igual al monto del costo.');
+      return;
+    }
+  }
+
+  const ahora = new Date();
+  const costo = { id: uid(), categoria: costoCategoriaSeleccionada, monto, metodoPago, fecha: fechaCO(ahora), hora: horaCO(ahora), nota, efectivo, transferencia };
+  const ok = await sheetsEscribir('append','Costos',[costo.id,costo.categoria,costo.monto,costo.metodoPago,costo.fecha,costo.hora,costo.nota,efectivo!=null?efectivo:'',transferencia!=null?transferencia:'']);
+  DB.costos.push(costo);
+
+  guardarLocal();
+  cerrarModal('modal-costo');
+  renderCostos();
+  renderDashboard();
+  mostrarToast('Costo registrado ✓');
+}
+
+async function eliminarCosto(id) {
+  if (!confirm('¿Eliminar este costo?')) return;
+  await sheetsEscribir('delete','Costos',null,id);
+  DB.costos = DB.costos.filter(c => c.id!==id);
+  guardarLocal(); renderCostos(); renderDashboard(); mostrarToast('Costo eliminado');
+}
+
+function renderCostos() {
+  const ahora = new Date();
+  const costosMes = DB.costos.filter(c => {
+    const d = parseFechaCO(c.fecha);
+    return d.getMonth()===ahora.getMonth() && d.getFullYear()===ahora.getFullYear();
+  });
+  const totalMes = costosMes.reduce((a,c)=>a+c.monto,0);
+  const efectivoMes = costosMes.reduce((a,c)=>a+partesGasto(c).ef,0);
+  const transferenciaMes = costosMes.reduce((a,c)=>a+partesGasto(c).tr,0);
+
+  document.getElementById('costos-resumen').innerHTML = `
+    <div id="dash-metrics">
+      <div class="metric rosa"><div class="mlabel">Costos de este mes</div><div class="mvalue">${fmt(totalMes)}</div></div>
+      <div class="metric"><div class="mlabel">💵 Efectivo</div><div class="mvalue">${fmt(efectivoMes)}</div></div>
+      <div class="metric"><div class="mlabel">🏦 Transferencia</div><div class="mvalue">${fmt(transferenciaMes)}</div></div>
+    </div>`;
+
+  const porCat = {};
+  costosMes.forEach(c => { porCat[c.categoria] = (porCat[c.categoria] || 0) + c.monto; });
+  const cats = Object.keys(porCat).sort((a,b) => porCat[b]-porCat[a]);
+  document.getElementById('costos-categorias-mes').innerHTML = cats.length
+    ? `<p class="rep-seccion" style="margin-top:0">Por categoría este mes</p>
+       <div class="rep-neto-grid" style="margin-bottom:1.25rem">${cats.map(k=>`<div class="reporte-pago-card"><div class="rp-label">${esc(k)}</div><div class="rp-value">${fmt(porCat[k])}</div></div>`).join('')}</div>`
+    : '';
+
+  const cont = document.getElementById('costos-contenido');
+  if (DB.costos.length === 0) {
+    cont.innerHTML = `<div class="estado-vacio"><i class="ti ti-box-seam"></i><p>Sin costos registrados.</p></div>`;
+    return;
+  }
+
+  const filas = DB.costos.slice().reverse().map(c => `
+    <tr>
+      <td>${c.fecha}</td>
+      <td><span class="badge rosa">${esc(c.categoria)}</span></td>
+      <td>${fmt(c.monto)}</td>
+      <td>${badgeMetodo(c)}</td>
+      <td style="font-size:13px;color:var(--texto2)">${esc(c.nota)||'-'}</td>
+      <td><button class="btn-peligro btn-eliminar-costo" data-id="${c.id}" style="padding:5px 9px"><i class="ti ti-trash"></i></button></td>
+    </tr>`).join('');
+
+  cont.innerHTML = `<div class="tabla-wrap"><table>
+    <thead><tr><th>Fecha</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Detalle</th><th></th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+
+  cont.querySelectorAll('.btn-eliminar-costo').forEach(b => b.addEventListener('click', () => eliminarCosto(b.dataset.id)));
+}
+
+// =============================================
 // DASHBOARD
 // =============================================
 function mostrarModalStock(tipo) {
@@ -2425,7 +2565,8 @@ function renderDashboard() {
   const ventasHoy = DB.ventas.filter(v => v.fecha === hoy);
   const totalVendidoBruto = ventasHoy.reduce((a,v) => a+v.total, 0);
   const gastosHoy = DB.gastos.filter(g => g.fecha === hoy).reduce((a,g) => a+g.monto, 0);
-  const totalVendido = totalVendidoBruto - gastosHoy;
+  const costosHoy = DB.costos.filter(c => c.fecha === hoy).reduce((a,c) => a+c.monto, 0);
+  const totalVendido = totalVendidoBruto - gastosHoy - costosHoy;
   const sinStock  = DB.productos.filter(p => p.stock <= 0).length;
   const stockBajo = DB.productos.filter(p => p.stock > 0 && p.stock <= DB.config.stockMin).length;
   const deudasVencidas = DB.deudores.filter(d => deudaVencida(d)).length;
@@ -2438,12 +2579,12 @@ function renderDashboard() {
   document.getElementById('dash-metrics').innerHTML = `
     <div class="metric rosa"><div class="mlabel">Total vendido hoy (neto)</div><div class="mvalue">${fmt(totalVendido)}</div></div>
     ${gastosHoy>0?`<div class="metric danger"><div class="mlabel">Gastos de hoy</div><div class="mvalue">${fmt(gastosHoy)}</div></div>`:''}
+    ${costosHoy>0?`<div class="metric danger"><div class="mlabel">Costos de hoy</div><div class="mvalue">${fmt(costosHoy)}</div></div>`:''}
     <div class="metric"><div class="mlabel">Transacciones</div><div class="mvalue">${ventasHoy.length}</div></div>
     <div class="metric"><div class="mlabel">Productos</div><div class="mvalue">${DB.productos.length}</div></div>
     ${stockBajo>0?`<div class="metric alerta metric-clickeable" data-stock="bajo"><div class="mlabel">Stock bajo</div><div class="mvalue">${stockBajo}</div></div>`:''}
     ${sinStock>0?`<div class="metric danger metric-clickeable" data-stock="sin"><div class="mlabel">Sin stock</div><div class="mvalue">${sinStock}</div></div>`:''}
     ${deudasVencidas>0?`<div class="metric danger"><div class="mlabel">Deudas vencidas</div><div class="mvalue">${deudasVencidas}</div></div>`:''}
-    ${anticiposVencidos>0?`<div class="metric danger"><div class="mlabel">Anticipos vencidos</div><div class="mvalue">${anticiposVencidos}</div></div>`:''}
     ${facturasPorVencer>0?`<div class="metric alerta"><div class="mlabel">Facturas por vencer</div><div class="mvalue">${facturasPorVencer}</div></div>`:''}
     ${facturasVencidas>0?`<div class="metric danger"><div class="mlabel">Facturas vencidas</div><div class="mvalue">${facturasVencidas}</div></div>`:''}
   `;
@@ -3618,7 +3759,8 @@ function renderReportes(periodo) {
   const enRango = f => { const d = parseFechaCO(f); return d >= desde && d <= hasta; };
   const ventas = DB.ventas.filter(v => enRango(v.fecha));
   const gastos = DB.gastos.filter(g => enRango(g.fecha));
-  const r = resumenMetodos(ventas, gastos);
+  const costos = DB.costos.filter(c => enRango(c.fecha));
+  const r = resumenMetodos(ventas, gastos, costos);
 
   const labels = {
     dia:'hoy', semana:'esta semana', mes:'este mes', año:'este año',
@@ -3641,7 +3783,8 @@ function renderReportes(periodo) {
     kpiHTML('rosa', 'ti-trending-up', 'Total vendido', fmt(r.vendido)) +
     kpiHTML('dorado', 'ti-coin', 'Ganancia', fmt(r.ganancia)) +
     kpiHTML('danger', 'ti-receipt-2', 'Gastos', fmt(r.gasto)) +
-    kpiHTML(r.neto < 0 ? 'danger' : 'neto', 'ti-wallet', 'Ganancia neta', fmt(r.neto), 'Ganancia − gastos') +
+    kpiHTML('danger', 'ti-box-seam', 'Costos', fmt(r.costo)) +
+    kpiHTML(r.neto < 0 ? 'danger' : 'neto', 'ti-wallet', 'Ganancia neta', fmt(r.neto), 'Ganancia − gastos − costos') +
     kpiHTML('teal', 'ti-shopping-bag', 'Transacciones', String(ventas.length), ventas.length ? 'Promedio ' + fmt(promedio) : '');
 
   renderGraficaReporte(periodo, ventas, desde, labels[periodo]);
@@ -3695,6 +3838,8 @@ function renderReportes(periodo) {
       <div class="eq-caja"><span>Ganancia de ventas</span><strong class="dorado">${fmt(r.ganancia)}</strong></div>
       <span class="eq-signo">−</span>
       <div class="eq-caja"><span>Gastos</span><strong class="rojo">${fmt(r.gasto)}</strong></div>
+      <span class="eq-signo">−</span>
+      <div class="eq-caja"><span>Costos</span><strong class="rojo">${fmt(r.costo)}</strong></div>
       <span class="eq-signo">=</span>
       <div class="eq-caja eq-total"><span>Ganancia neta</span><strong>${fmt(r.neto)}</strong></div>
     </div>
@@ -3703,13 +3848,13 @@ function renderReportes(periodo) {
         <span class="rp-icon">💵</span>
         <div class="rp-label">Ganancia neta en Efectivo</div>
         <div class="rp-value${neg(r.netoEf)}">${fmt(r.netoEf)}</div>
-        <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)}</div>
+        <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)} − Costos ${fmt(r.csEf)}</div>
       </div>
       <div class="reporte-pago-card">
         <span class="rp-icon">🏦</span>
         <div class="rp-label">Ganancia neta en Transferencia</div>
         <div class="rp-value${neg(r.netoTr)}">${fmt(r.netoTr)}</div>
-        <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)}</div>
+        <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)} − Costos ${fmt(r.csTr)}</div>
       </div>
       <div class="reporte-pago-card destacada">
         <span class="rp-icon">📊</span>
@@ -3718,6 +3863,18 @@ function renderReportes(periodo) {
         <div class="rp-sub">Efectivo + Transferencia</div>
       </div>
     </div>`;
+
+  // Costos del periodo por categoría
+  const contCostos = document.getElementById('reporte-costos');
+  if (contCostos) {
+    const porCat = {};
+    costos.forEach(c => { porCat[c.categoria] = (porCat[c.categoria] || 0) + c.monto; });
+    const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]);
+    contCostos.innerHTML = cats.length
+      ? cats.map(k => `<div class="reporte-pago-card"><div class="rp-label">${esc(k)}</div><div class="rp-value">${fmt(porCat[k])}</div></div>`).join('')
+        + `<div class="reporte-pago-card destacada"><div class="rp-label">Total costos</div><div class="rp-value">${fmt(r.costo)}</div></div>`
+      : `<p style="font-size:13px;color:var(--texto2)">Sin costos registrados en este periodo.</p>`;
+  }
 
   // Resumen neto: el mes actual, o el mes que se esté consultando
   renderResumenNetoMes(periodo === 'mes-esp' ? desde : null);
@@ -3842,7 +3999,8 @@ function renderResumenNetoMes(ref) {
 
   const ventasMes = DB.ventas.filter(v => { const d = parseFechaCO(v.fecha); return d>=inicioMes && d<=finMes; });
   const gastosMes = DB.gastos.filter(g => { const d = parseFechaCO(g.fecha); return d>=inicioMes && d<=finMes; });
-  const r = resumenMetodos(ventasMes, gastosMes);
+  const costosMes = DB.costos.filter(c => { const d = parseFechaCO(c.fecha); return d>=inicioMes && d<=finMes; });
+  const r = resumenMetodos(ventasMes, gastosMes, costosMes);
 
   const pagosProveedoresMes = DB.proveedores.flatMap(p => p.abonos||[])
     .filter(a => { const d = parseFechaCO(a.fecha); return d>=inicioMes && d<=finMes; })
@@ -3853,6 +4011,7 @@ function renderResumenNetoMes(ref) {
     <div class="rep-kpis">
       ${kpiHTML('dorado', 'ti-coin', 'Ganancia del mes', fmt(r.ganancia))}
       ${kpiHTML('danger', 'ti-receipt-2', 'Gastos del mes', fmt(r.gasto))}
+      ${kpiHTML('danger', 'ti-box-seam', 'Costos del mes', fmt(r.costo))}
       ${kpiHTML(r.neto < 0 ? 'danger' : 'neto', 'ti-wallet', 'Ganancia neta del mes', fmt(r.neto))}
       ${kpiHTML('rosa', 'ti-trending-up', 'Ventas del mes', fmt(r.vendido))}
       ${kpiHTML('danger', 'ti-building-warehouse', 'Pagos a proveedores', fmt(pagosProveedoresMes))}
@@ -3864,13 +4023,13 @@ function renderResumenNetoMes(ref) {
       <span class="rp-icon">💵</span>
       <div class="rp-label">Neto en Efectivo</div>
       <div class="rp-value">${fmt(r.netoEf)}</div>
-      <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)}</div>
+      <div class="rp-sub">Ganancia ${fmt(r.gaEf)} − Gastos ${fmt(r.gsEf)} − Costos ${fmt(r.csEf)}</div>
     </div>
     <div class="reporte-pago-card">
       <span class="rp-icon">🏦</span>
       <div class="rp-label">Neto en Transferencia</div>
       <div class="rp-value">${fmt(r.netoTr)}</div>
-      <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)}</div>
+      <div class="rp-sub">Ganancia ${fmt(r.gaTr)} − Gastos ${fmt(r.gsTr)} − Costos ${fmt(r.csTr)}</div>
     </div>`;
 }
 
@@ -4542,6 +4701,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!DB.anticipos) DB.anticipos = [];
   if (!DB.proveedores) DB.proveedores = [];
   if (!DB.gastos) DB.gastos = [];
+  if (!DB.costos) DB.costos = [];
   if (!DB.traslados) DB.traslados = [];
   if (!DB.liquidaciones) DB.liquidaciones = [];
 
@@ -4806,6 +4966,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('gasto-mixto-transferencia').addEventListener('input', () => gastoMixtoDesde('tr'));
   document.querySelectorAll('.gasto-cat-btn').forEach(b =>
     b.addEventListener('click', () => seleccionarCategoriaGasto(b.dataset.cat, b)));
+
+  // Costos
+  document.getElementById('btn-abrir-modal-costo').addEventListener('click', abrirModalCosto);
+  document.getElementById('btn-guardar-costo').addEventListener('click', guardarCosto);
+  document.querySelectorAll('input[name="costo-metodo"]').forEach(r => r.addEventListener('change', costoActualizarMixto));
+  document.getElementById('costo-monto').addEventListener('input', () => {
+    if (document.querySelector('input[name="costo-metodo"]:checked').value === 'mixto') costoMixtoDesde('monto');
+  });
+  document.getElementById('costo-mixto-efectivo').addEventListener('input', () => costoMixtoDesde('ef'));
+  document.getElementById('costo-mixto-transferencia').addEventListener('input', () => costoMixtoDesde('tr'));
+  document.querySelectorAll('.costo-cat-btn').forEach(b =>
+    b.addEventListener('click', () => seleccionarCategoriaCosto(b.dataset.cat, b)));
 
   // Nota crédito
 
