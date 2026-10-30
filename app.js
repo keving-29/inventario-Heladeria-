@@ -2592,6 +2592,8 @@ function renderDashboard() {
   document.querySelectorAll('#dash-metrics .metric-clickeable').forEach(el =>
     el.addEventListener('click', () => mostrarModalStock(el.dataset.stock)));
 
+  renderTopResumen();
+
   const cont = document.getElementById('dash-ventas-hoy');
   if (ventasHoy.length === 0) {
     cont.innerHTML = `<div class="estado-vacio"><i class="ti ti-shopping-bag"></i><p>Sin ventas hoy. ¡A vender!</p></div>`;
@@ -3759,6 +3761,109 @@ function kpiHTML(cls, icono, label, valor, sub) {
   return `<div class="metric ${cls}"><div class="mtop"><span class="micon ${cls}"><i class="ti ${icono}"></i></span><span class="mlabel">${label}</span></div><div class="mvalue">${valor}</div>${sub ? `<div class="msub">${sub}</div>` : ''}</div>`;
 }
 
+// ---------- Productos más vendidos ----------
+const TOP_COLORES = ['var(--rosa)','var(--dorado)','var(--malva)','var(--rosa-medio)','var(--texto2)'];
+const TOP_OTROS = 'var(--blush)';
+let topModo = 'unid';
+const topCtx = {};
+
+function calcularTop(ventas, modo) {
+  const mapa = {};
+  ventas.forEach(v => (v.items || []).forEach(i => {
+    const k = String(i.nombre || '').trim();
+    if (!k) return;
+    if (!mapa[k]) mapa[k] = { nombre: k, unid: 0, monto: 0 };
+    mapa[k].unid += Number(i.cantidad) || 0;
+    mapa[k].monto += Number(i.total) || 0;
+  }));
+  const lista = Object.values(mapa).map(p => Object.assign(p, { valor: modo === 'monto' ? p.monto : p.unid }))
+    .filter(p => p.valor > 0).sort((a, b) => b.valor - a.valor);
+  const total = lista.reduce((a, p) => a + p.valor, 0);
+  const totalUnid = lista.reduce((a, p) => a + p.unid, 0);
+  const top = lista.slice(0, 5);
+  const resto = lista.slice(5);
+  if (resto.length) top.push({ nombre: 'Otros productos (' + resto.length + ')', unid: resto.reduce((a, p) => a + p.unid, 0), monto: resto.reduce((a, p) => a + p.monto, 0), valor: resto.reduce((a, p) => a + p.valor, 0), otros: true });
+  top.forEach((p, i) => { p.pct = total ? p.valor / total * 100 : 0; p.color = p.otros ? TOP_OTROS : TOP_COLORES[i]; });
+  return { lista: top, total, totalUnid, hay: lista.length > 0 };
+}
+
+function pctTxt(n) { return (Math.round(n * 10) / 10).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %'; }
+
+function topDonaSVG(lista, centro, sub, size) {
+  const C = 2 * Math.PI * 70;
+  let acum = 0;
+  const arcos = lista.map(p => {
+    const len = C * p.pct / 100;
+    const s = `<circle cx="100" cy="100" r="70" style="stroke:${p.color}" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-acum).toFixed(2)}"></circle>`;
+    acum += len;
+    return s;
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 200 200" role="img" aria-label="Reparto de productos más vendidos">
+    <g transform="rotate(-90 100 100)" fill="none" stroke-width="30">${arcos}</g>
+    <text x="100" y="${sub ? 98 : 107}" text-anchor="middle" class="top-dona-n">${esc(centro)}</text>
+    ${sub ? `<text x="100" y="118" text-anchor="middle" class="top-dona-s">${esc(sub)}</text>` : ''}
+  </svg>`;
+}
+
+function renderTop(contId, ventas, mini) {
+  const cont = document.getElementById(contId);
+  if (!cont) return;
+  topCtx[contId] = { ventas, mini };
+  const r = calcularTop(ventas, mini ? 'unid' : topModo);
+  if (!r.hay) {
+    cont.innerHTML = `<p class="rep-nota">Sin ventas en este periodo.</p>`;
+    return;
+  }
+  const esMonto = !mini && topModo === 'monto';
+  const centro = esMonto ? fmt(r.total) : String(r.total);
+  const sub = esMonto ? 'vendido' : 'unidades vendidas';
+  const filas = (mini ? r.lista.filter(p => !p.otros).slice(0, 3) : r.lista).map(p => `
+    <div class="top-fila">
+      <span class="top-punto" style="background:${p.color}"></span>
+      <span class="top-nombre">${esc(p.nombre)}</span>
+      <span class="top-cant">${esMonto ? fmt(p.monto) : p.unid}</span>
+      <span class="top-barra"><span style="width:${Math.max(2, p.pct / r.lista[0].pct * 100).toFixed(1)}%;background:${p.color}"></span></span>
+      <strong class="top-pct">${pctTxt(p.pct)}</strong>
+    </div>`).join('');
+  if (mini) {
+    cont.innerHTML = `<div class="top-mini">
+      <div class="top-mini-dona">${topDonaSVG(r.lista, centro, sub, 150)}</div>
+      <div class="top-mini-lista">${filas}</div></div>`;
+    return;
+  }
+  const g = r.lista[0];
+  cont.innerHTML = `
+    <div class="top-toggle">
+      <button type="button" class="top-modo${topModo === 'unid' ? ' active' : ''}" data-modo="unid">Por unidades</button>
+      <button type="button" class="top-modo${topModo === 'monto' ? ' active' : ''}" data-modo="monto">Por ventas $</button>
+    </div>
+    <div class="top-grid">
+      <div class="top-dona">${topDonaSVG(r.lista, centro, sub, 240)}</div>
+      <div class="top-hero">
+        <div class="top-hero-et">🏆 El más vendido</div>
+        <div class="top-hero-n">${esc(g.nombre)}</div>
+        <div class="top-hero-stats">
+          <div><b>${g.unid}</b>unidades</div>
+          <div><b>${pctTxt(g.pct)}</b>del total</div>
+          <div><b class="oro">${fmt(g.monto)}</b>en ventas</div>
+        </div>
+      </div>
+    </div>
+    <div class="top-cab"><span></span><span>Producto</span><span>${esMonto ? 'Ventas' : 'Unidades'}</span><span></span><span>%</span></div>
+    ${filas}`;
+  cont.querySelectorAll('.top-modo').forEach(b => b.addEventListener('click', () => {
+    topModo = b.dataset.modo;
+    renderTop(contId, topCtx[contId].ventas, false);
+  }));
+}
+
+function renderTopResumen() {
+  const hoy = parseFechaCO(fechaCO());
+  const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const ventas = DB.ventas.filter(v => { const d = parseFechaCO(v.fecha); return d >= ini && d <= hoy; });
+  renderTop('dash-top', ventas, true);
+}
+
 function renderReportes(periodo) {
   periodoreporte = periodo;
 
@@ -3869,6 +3974,8 @@ function renderReportes(periodo) {
         + `<div class="reporte-pago-card destacada"><div class="rp-label">Total costos</div><div class="rp-value">${fmt(r.costo)}</div></div>`
       : `<p style="font-size:13px;color:var(--texto2)">Sin costos registrados en este periodo.</p>`;
   }
+
+  renderTop('reporte-top', ventas, false);
 
 }
 
