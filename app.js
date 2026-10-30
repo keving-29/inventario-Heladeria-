@@ -3771,7 +3771,7 @@ function calcularTop(ventas, modo) {
   const mapa = {};
   ventas.forEach(v => (v.items || []).forEach(i => {
     const k = String(i.nombre || '').trim();
-    if (!k) return;
+    if (!k || /^Liquidaci[oó]n\s*[—-]/i.test(k)) return;
     if (!mapa[k]) mapa[k] = { nombre: k, unid: 0, monto: 0 };
     mapa[k].unid += Number(i.cantidad) || 0;
     mapa[k].monto += Number(i.total) || 0;
